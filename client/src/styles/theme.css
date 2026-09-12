@@ -1,0 +1,153 @@
+/* Life RPG Theme Definitions */
+
+:root {
+  --font-main: 'Cinzel', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-stats: 'JetBrains Mono', 'Fira Code', monospace;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 1. Theme: Obsidian Forge (Default) */
+[data-theme="theme-obsidian"], :root {
+  --bg-base: #0a0c10;
+  --bg-surface: #12161f;
+  --bg-surface-hover: #1a202c;
+  --bg-card: rgba(18, 22, 31, 0.75);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(245, 158, 11, 0.3);
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --accent-gold: #f59e0b;
+  --accent-gold-glow: rgba(245, 158, 11, 0.4);
+  --accent-xp: #8b5cf6;
+  --accent-xp-glow: rgba(139, 92, 246, 0.4);
+  --accent-streak: #ef4444;
+  --accent-streak-glow: rgba(239, 68, 68, 0.4);
+
+  --attr-intellect: #3b82f6;
+  --attr-strength: #ef4444;
+  --attr-discipline: #10b981;
+  --attr-creativity: #ec4899;
+  --attr-charisma: #f59e0b;
+  --attr-endurance: #06b6d4;
+}
+
+/* 2. Theme: Cyberpunk Neon */
+[data-theme="theme-cyberpunk"] {
+  --bg-base: #060814;
+  --bg-surface: #0e1329;
+  --bg-surface-hover: #181f42;
+  --bg-card: rgba(14, 19, 41, 0.85);
+  --border-color: rgba(6, 182, 212, 0.25);
+  --border-glow: rgba(6, 182, 212, 0.6);
+
+  --text-primary: #e0f2fe;
+  --text-secondary: #7dd3fc;
+  --text-muted: #38bdf8;
+
+  --accent-gold: #06b6d4;
+  --accent-gold-glow: rgba(6, 182, 212, 0.5);
+  --accent-xp: #d946ef;
+  --accent-xp-glow: rgba(217, 70, 239, 0.6);
+  --accent-streak: #f43f5e;
+  --accent-streak-glow: rgba(244, 63, 94, 0.5);
+
+  --attr-intellect: #06b6d4;
+  --attr-strength: #f43f5e;
+  --attr-discipline: #10b981;
+  --attr-creativity: #d946ef;
+  --attr-charisma: #eab308;
+  --attr-endurance: #38bdf8;
+}
+
+/* 3. Theme: Solarized Guild */
+[data-theme="theme-solarized"] {
+  --bg-base: #130f08;
+  --bg-surface: #221a10;
+  --bg-surface-hover: #332716;
+  --bg-card: rgba(34, 26, 16, 0.85);
+  --border-color: rgba(245, 158, 11, 0.2);
+  --border-glow: rgba(245, 158, 11, 0.5);
+
+  --text-primary: #fef3c7;
+  --text-secondary: #fde68a;
+  --text-muted: #d97706;
+
+  --accent-gold: #f59e0b;
+  --accent-gold-glow: rgba(245, 158, 11, 0.6);
+  --accent-xp: #f97316;
+  --accent-xp-glow: rgba(249, 115, 22, 0.5);
+  --accent-streak: #dc2626;
+  --accent-streak-glow: rgba(220, 38, 38, 0.5);
+
+  --attr-intellect: #60a5fa;
+  --attr-strength: #f87171;
+  --attr-discipline: #34d399;
+  --attr-creativity: #fbbf24;
+  --attr-charisma: #f59e0b;
+  --attr-endurance: #fb923c;
+}
+
+/* 4. Theme: Emerald Glade */
+[data-theme="theme-emerald"] {
+  --bg-base: #06130b;
+  --bg-surface: #0d2315;
+  --bg-surface-hover: #143520;
+  --bg-card: rgba(13, 35, 21, 0.85);
+  --border-color: rgba(16, 185, 129, 0.2);
+  --border-glow: rgba(16, 185, 129, 0.5);
+
+  --text-primary: #ecfdf5;
+  --text-secondary: #a7f3d0;
+  --text-muted: #34d399;
+
+  --accent-gold: #10b981;
+  --accent-gold-glow: rgba(16, 185, 129, 0.5);
+  --accent-xp: #3b82f6;
+  --accent-xp-glow: rgba(59, 130, 246, 0.5);
+  --accent-streak: #f59e0b;
+  --accent-streak-glow: rgba(245, 158, 11, 0.5);
+
+  --attr-intellect: #38bdf8;
+  --attr-strength: #ef4444;
+  --attr-discipline: #10b981;
+  --attr-creativity: #a855f7;
+  --attr-charisma: #f59e0b;
+  --attr-endurance: #34d399;
+}
+
+/* 5. Theme: Vaporwave Synth */
+[data-theme="theme-vaporwave"] {
+  --bg-base: #140826;
+  --bg-surface: #220f3d;
+  --bg-surface-hover: #321658;
+  --bg-card: rgba(34, 15, 61, 0.85);
+  --border-color: rgba(236, 72, 153, 0.3);
+  --border-glow: rgba(236, 72, 153, 0.6);
+
+  --text-primary: #fdf2f8;
+  --text-secondary: #fbcfe8;
+  --text-muted: #f472b6;
+
+  --accent-gold: #f472b6;
+  --accent-gold-glow: rgba(244, 114, 182, 0.6);
+  --accent-xp: #a855f7;
+  --accent-xp-glow: rgba(168, 85, 247, 0.6);
+  --accent-streak: #fb7185;
+  --accent-streak-glow: rgba(251, 113, 133, 0.5);
+
+  --attr-intellect: #38bdf8;
+  --attr-strength: #f43f5e;
+  --attr-discipline: #2dd4bf;
+  --attr-creativity: #ec4899;
+  --attr-charisma: #fbbf24;
+  --attr-endurance: #c084fc;
+}
