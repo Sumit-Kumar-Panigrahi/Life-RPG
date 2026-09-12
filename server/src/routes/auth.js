@@ -276,8 +276,21 @@ authRouter.get('/google/callback', async (req, res) => {
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
-      console.error('[Google Token Exchange Failed]', errText);
-      return res.redirect('/?auth_error=token_exchange_failed');
+      let parsed = {};
+      try { parsed = JSON.parse(errText); } catch {}
+      console.error('[Google Token Exchange Failed Diagnostic]', {
+        httpStatus: tokenRes.status,
+        oauthError: parsed.error || 'unknown',
+        errorDescription: parsed.error_description || errText,
+        callbackUrlSent: CONFIG.GOOGLE_CALLBACK_URL,
+        clientIdPresent: Boolean(CONFIG.GOOGLE_CLIENT_ID),
+        clientIdMasked: CONFIG.GOOGLE_CLIENT_ID ? `${CONFIG.GOOGLE_CLIENT_ID.slice(0, 12)}...${CONFIG.GOOGLE_CLIENT_ID.slice(-25)}` : 'MISSING',
+        clientSecretPresent: Boolean(CONFIG.GOOGLE_CLIENT_SECRET) ? 'YES' : 'NO',
+        clientSecretLength: CONFIG.GOOGLE_CLIENT_SECRET ? CONFIG.GOOGLE_CLIENT_SECRET.length : 0,
+        isPlaceholderSecret: CONFIG.GOOGLE_CLIENT_SECRET === 'YOUR_NEW_SECRET'
+      });
+      const errorCategory = parsed.error || 'token_exchange_failed';
+      return res.redirect(`/?auth_error=${encodeURIComponent(errorCategory)}&error_desc=${encodeURIComponent(parsed.error_description || '')}`);
     }
 
     const tokens = await tokenRes.json();

@@ -64,12 +64,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const authErr = params.get('auth_error');
 
     if (authErr) {
+      const errorDesc = params.get('error_desc');
       if (authErr === 'oauth_cancelled') {
         setOauthError('Google sign-in was cancelled by the user.');
       } else if (authErr === 'google_not_configured') {
         setOauthError('Google OAuth is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.');
+      } else if (authErr === 'invalid_client') {
+        setOauthError(
+          errorDesc
+            ? `Google OAuth Error (invalid_client): ${errorDesc}`
+            : 'Google OAuth Error (invalid_client): The provided client secret is invalid.'
+        );
       } else {
-        setOauthError(`Google authentication encountered an error (${authErr}).`);
+        setOauthError(
+          errorDesc
+            ? `Google authentication error (${authErr}): ${errorDesc}`
+            : `Google authentication encountered an error (${authErr}).`
+        );
       }
       window.history.replaceState({}, document.title, window.location.pathname);
     }
