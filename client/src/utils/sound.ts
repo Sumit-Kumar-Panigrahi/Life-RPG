@@ -6,13 +6,21 @@
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private muted: boolean = false;
+  private volume: number = 0.8;
 
   constructor() {
     this.muted = localStorage.getItem('liferpg_sound_muted') === 'true';
+    const savedVol = localStorage.getItem('liferpg_sound_volume');
+    if (savedVol !== null) {
+      const parsed = parseFloat(savedVol);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+        this.volume = parsed;
+      }
+    }
   }
 
   private getContext(): AudioContext | null {
-    if (this.muted) return null;
+    if (this.muted || this.volume <= 0) return null;
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
@@ -35,6 +43,21 @@ class SoundEngine {
     return this.muted;
   }
 
+  public setMuted(muted: boolean): void {
+    this.muted = muted;
+    localStorage.setItem('liferpg_sound_muted', String(this.muted));
+  }
+
+  public getVolume(): number {
+    return this.volume;
+  }
+
+  public setVolume(vol: number): void {
+    const clamped = Math.max(0, Math.min(1, vol));
+    this.volume = clamped;
+    localStorage.setItem('liferpg_sound_volume', String(clamped));
+  }
+
   public playClick(): void {
     const ctx = this.getContext();
     if (!ctx) return;
@@ -46,7 +69,8 @@ class SoundEngine {
     osc.frequency.setValueAtTime(400, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.05);
 
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    const baseGain = 0.1 * this.volume;
+    gain.gain.setValueAtTime(baseGain, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
 
     osc.connect(gain);

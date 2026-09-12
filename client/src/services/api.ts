@@ -96,6 +96,16 @@ export const api = {
       }>('/auth/google/simulate-callback', {
         method: 'POST',
         body: JSON.stringify(body)
+      }),
+
+    updateProfile: (body: { username?: string; email?: string }) =>
+      request<{
+        message: string;
+        user: User;
+        character: Character;
+      }>('/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(body)
       })
   },
 
@@ -164,8 +174,13 @@ export const api = {
         stats: { totalQuests: number; completedQuests: number; activeQuests: number };
       }>('/character'),
 
-    updateCharacter: (body: { characterName?: string; avatarClass?: string }) =>
-      request<{ character: Character }>('/character', {
+    updateCharacter: (body: {
+      characterName?: string;
+      avatarClass?: string;
+      activeTitle?: string;
+      activeTheme?: string;
+    }) =>
+      request<{ character: Character; attributes: Attribute[] }>('/character', {
         method: 'PUT',
         body: JSON.stringify(body)
       })

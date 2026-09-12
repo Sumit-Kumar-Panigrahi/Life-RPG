@@ -206,6 +206,71 @@ authRouter.get('/me', requireAuth, (req, res) => {
   }
 });
 
+// PUT /api/auth/profile - Update account username and email
+authRouter.put('/profile', requireAuth, (req, res) => {
+  try {
+    const { username, email } = req.body;
+    const currentUser = db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    let newUsername = currentUser.username;
+    if (username !== undefined) {
+      const cleanUsername = username.trim();
+      if (cleanUsername.length < 3 || cleanUsername.length > 24) {
+        return res.status(400).json({ error: 'Username must be between 3 and 24 characters.' });
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
+        return res.status(400).json({ error: 'Username may only contain letters, numbers, and underscores.' });
+      }
+
+      // Check uniqueness against other users
+      const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?').get(cleanUsername, req.user.id);
+      if (existingUser) {
+        return res.status(409).json({ error: 'This hero username is already claimed.' });
+      }
+      newUsername = cleanUsername;
+    }
+
+    let newEmail = currentUser.email;
+    if (email !== undefined) {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+        return res.status(400).json({ error: 'Please enter a valid email address.' });
+      }
+
+      // Check uniqueness against other users
+      const existingEmail = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?').get(cleanEmail, req.user.id);
+      if (existingEmail) {
+        return res.status(409).json({ error: 'This email address is already registered.' });
+      }
+      newEmail = cleanEmail;
+    }
+
+    db.prepare('UPDATE users SET username = ?, email = ? WHERE id = ?').run(newUsername, newEmail, req.user.id);
+
+    // Refresh JWT token with updated username/email
+    const token = generateToken({ id: req.user.id, username: newUsername, email: newEmail });
+    res.cookie('token', token, COOKIE_OPTIONS);
+
+    const updatedUser = db.prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(req.user.id);
+    const updatedChar = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(req.user.id);
+    if (updatedChar) {
+      updatedChar.requiredXp = getRequiredXpForNextLevel(updatedChar.level);
+    }
+
+    return res.json({
+      message: 'Account profile updated successfully.',
+      user: updatedUser,
+      character: updatedChar
+    });
+  } catch (error) {
+    console.error('[Update Profile Error]', error);
+    return res.status(500).json({ error: 'Failed to update account profile.' });
+  }
+});
+
 // GET /api/auth/google/status - Check if Google OAuth credentials are set
 authRouter.get('/google/status', (req, res) => {
   const isConfigured = Boolean(CONFIG.GOOGLE_CLIENT_ID && CONFIG.GOOGLE_CLIENT_SECRET);

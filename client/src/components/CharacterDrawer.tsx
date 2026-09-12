@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Shield,
@@ -10,9 +10,15 @@ import {
   Heart,
   Flame,
   Swords,
-  Trophy
+  Trophy,
+  Edit3,
+  Save,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
+import { sound } from '../utils/sound';
 
 interface CharacterDrawerProps {
   isOpen: boolean;
@@ -29,9 +35,82 @@ const ATTRIBUTE_METADATA: Record<string, { label: string; icon: React.ElementTyp
 };
 
 export const CharacterDrawer: React.FC<CharacterDrawerProps> = ({ isOpen, onClose }) => {
-  const { character, attributes } = useAuth();
+  const { character, attributes, inventory, updateCharacterState, setTheme } = useAuth();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [characterName, setCharacterName] = useState('');
+  const [avatarClass, setAvatarClass] = useState('WARRIOR');
+  const [activeTitle, setActiveTitle] = useState('Novice Adventurer');
+  const [activeTheme, setActiveTheme] = useState('theme-obsidian');
+
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (character && isOpen) {
+      setCharacterName(character.character_name);
+      setAvatarClass(character.avatar_class || 'WARRIOR');
+      setActiveTitle(character.active_title || 'Novice Adventurer');
+      setActiveTheme(character.active_theme || 'theme-obsidian');
+      setIsEditing(false);
+      setError(null);
+      setSuccess(null);
+    }
+  }, [character, isOpen]);
 
   if (!isOpen || !character) return null;
+
+  // Owned titles list
+  const ownedTitles = inventory.filter(i => i.category === 'TITLE').map(i => i.name);
+  if (!ownedTitles.includes('Novice Adventurer')) {
+    ownedTitles.unshift('Novice Adventurer');
+  }
+
+  // Owned themes list
+  const ownedThemes = inventory.filter(i => i.category === 'THEME');
+  if (!ownedThemes.some(t => t.item_id === 'theme-obsidian')) {
+    ownedThemes.unshift({
+      item_id: 'theme-obsidian',
+      name: 'Obsidian Forge',
+      description: 'Default dark knight obsidian armor aesthetic',
+      category: 'THEME',
+      icon: 'Palette',
+      acquired_at: new Date().toISOString()
+    });
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!characterName.trim()) {
+      setError('Character name cannot be empty.');
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setSubmitting(true);
+    sound.playEquip();
+
+    try {
+      const res = await api.character.updateCharacter({
+        characterName: characterName.trim(),
+        avatarClass,
+        activeTitle,
+        activeTheme
+      });
+
+      setTheme(activeTheme);
+      updateCharacterState(res.character, res.attributes);
+      setSuccess('Hero dossier updated successfully!');
+      setIsEditing(false);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update hero dossier.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div
@@ -43,7 +122,7 @@ export const CharacterDrawer: React.FC<CharacterDrawerProps> = ({ isOpen, onClos
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="modal-card" style={{ maxWidth: '620px' }}>
+      <div className="modal-card" style={{ maxWidth: '640px', maxHeight: '88vh', overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -57,59 +136,186 @@ export const CharacterDrawer: React.FC<CharacterDrawerProps> = ({ isOpen, onClos
           </button>
         </div>
 
+        {/* Feedback alerts */}
+        {error && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: 'var(--radius-sm)', color: '#10b981', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            <CheckCircle2 size={16} />
+            <span>{success}</span>
+          </div>
+        )}
+
         {/* Hero Card Overview */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: '1.25rem',
             padding: '1.25rem',
             background: 'var(--bg-base)',
             border: '1px solid var(--border-color)',
             borderRadius: 'var(--radius-lg)',
-            marginBottom: '1.5rem'
+            marginBottom: '1.25rem',
+            flexWrap: 'wrap'
           }}
         >
-          <div
-            style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--accent-gold), var(--accent-xp))',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#000',
-              fontWeight: 900,
-              fontSize: '1.5rem',
-              boxShadow: '0 0 20px var(--accent-gold-glow)'
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, var(--accent-gold), var(--accent-xp))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#000',
+                boxShadow: '0 0 20px var(--accent-gold-glow)'
+              }}
+            >
+              <Swords size={32} />
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{character.character_name}</h3>
+                <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.2)', color: 'var(--accent-xp)' }}>
+                  {character.avatar_class}
+                </span>
+              </div>
+
+              <div style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', marginTop: '0.2rem', fontWeight: 600 }}>
+                Title: {character.active_title}
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                <span>Level: <strong>{character.level}</strong></span>
+                <span>Total XP: <strong>{character.current_xp}</strong></span>
+                <span>Gold: <strong>{character.gold}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+            onClick={() => {
+              sound.playClick();
+              setIsEditing(prev => !prev);
+              setError(null);
             }}
           >
-            <Swords size={32} />
-          </div>
-
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{character.character_name}</h3>
-              <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.2)', color: 'var(--accent-xp)' }}>
-                {character.avatar_class}
-              </span>
-            </div>
-
-            <div style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', marginTop: '0.2rem', fontWeight: 600 }}>
-              Title: {character.active_title}
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              <span>Level: <strong>{character.level}</strong></span>
-              <span>Total XP: <strong>{character.current_xp}</strong></span>
-              <span>Gold: <strong>{character.gold}</strong></span>
-            </div>
-          </div>
+            <Edit3 size={14} />
+            <span>{isEditing ? 'Cancel Edit' : 'Customize Hero'}</span>
+          </button>
         </div>
 
+        {/* Customization Form */}
+        {isEditing && (
+          <form
+            onSubmit={handleSave}
+            style={{
+              padding: '1.25rem',
+              background: 'rgba(245, 158, 11, 0.05)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '1.25rem'
+            }}
+          >
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '0.85rem' }}>
+              CUSTOMIZE HERO PERSONA
+            </h4>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="char-name-input">Hero Name</label>
+              <input
+                id="char-name-input"
+                type="text"
+                className="form-input"
+                value={characterName}
+                onChange={e => setCharacterName(e.target.value)}
+                required
+                minLength={2}
+                maxLength={32}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="char-class-select">RPG Class</label>
+                <select
+                  id="char-class-select"
+                  className="form-select"
+                  value={avatarClass}
+                  onChange={e => setAvatarClass(e.target.value)}
+                >
+                  <option value="WARRIOR">Warrior (STR)</option>
+                  <option value="MAGE">Mage (INT)</option>
+                  <option value="ROGUE">Rogue (DIS)</option>
+                  <option value="PALADIN">Paladin (CHA)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="char-title-select">Active Hero Title</label>
+                <select
+                  id="char-title-select"
+                  className="form-select"
+                  value={activeTitle}
+                  onChange={e => setActiveTitle(e.target.value)}
+                >
+                  {ownedTitles.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="char-theme-select">Visual Armor Theme</label>
+                <select
+                  id="char-theme-select"
+                  className="form-select"
+                  value={activeTheme}
+                  onChange={e => setActiveTheme(e.target.value)}
+                >
+                  {ownedThemes.map(t => (
+                    <option key={t.item_id} value={t.item_id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsEditing(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={submitting}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Save size={15} />
+                <span>{submitting ? 'Saving...' : 'Save Hero'}</span>
+              </button>
+            </div>
+          </form>
+        )}
+
         {/* Streaks & Vigor Metrics */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
           <div
             style={{
               padding: '0.9rem',
@@ -146,7 +352,7 @@ export const CharacterDrawer: React.FC<CharacterDrawerProps> = ({ isOpen, onClos
             <Trophy size={28} style={{ color: 'var(--accent-gold)' }} />
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                Longest Streak Record
+                Longest Record
               </div>
               <div style={{ fontSize: '1.2rem', fontWeight: 800, fontFamily: 'var(--font-stats)' }}>
                 {character.longest_streak} {character.longest_streak === 1 ? 'Day' : 'Days'}
@@ -233,7 +439,7 @@ export const CharacterDrawer: React.FC<CharacterDrawerProps> = ({ isOpen, onClos
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
           <button type="button" className="btn btn-secondary" onClick={onClose}>
             Close Dossier
           </button>

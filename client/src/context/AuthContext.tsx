@@ -21,6 +21,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateCharacterState: (character: Character, attributes?: Attribute[]) => void;
+  updateUserState: (user: User) => void;
   setTheme: (themeId: string) => void;
 }
 
@@ -145,6 +146,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserState = (newUser: User) => {
+    setUser(newUser);
+  };
+
   const setTheme = (themeId: string) => {
     applyTheme(themeId);
     if (character) {
@@ -167,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         refreshProfile,
         updateCharacterState,
+        updateUserState,
         setTheme
       }}
     >
