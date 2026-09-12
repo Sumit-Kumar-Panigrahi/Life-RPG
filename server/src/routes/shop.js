@@ -78,7 +78,7 @@ shopRouter.post('/purchase', (req, res) => {
 
       // Deduct gold
       const remainingGold = character.gold - item.cost;
-      db.prepare('UPDATE character_stats SET gold = ?, updated_at = datetime("now") WHERE user_id = ?').run(remainingGold, req.user.id);
+      db.prepare("UPDATE character_stats SET gold = ?, updated_at = datetime('now') WHERE user_id = ?").run(remainingGold, req.user.id);
 
       // Insert into inventory
       db.prepare('INSERT INTO user_inventory (user_id, item_id) VALUES (?, ?)').run(req.user.id, itemId);
@@ -120,9 +120,9 @@ shopRouter.post('/equip', (req, res) => {
     }
 
     if (item.category === 'THEME') {
-      db.prepare('UPDATE character_stats SET active_theme = ?, updated_at = datetime("now") WHERE user_id = ?').run(item.id, req.user.id);
+      db.prepare("UPDATE character_stats SET active_theme = ?, updated_at = datetime('now') WHERE user_id = ?").run(item.id, req.user.id);
     } else if (item.category === 'TITLE') {
-      db.prepare('UPDATE character_stats SET active_title = ?, updated_at = datetime("now") WHERE user_id = ?').run(item.name, req.user.id);
+      db.prepare("UPDATE character_stats SET active_title = ?, updated_at = datetime('now') WHERE user_id = ?").run(item.name, req.user.id);
     } else {
       return res.status(400).json({ error: 'Only themes and titles can be equipped.' });
     }
