@@ -172,4 +172,74 @@ describe('Life RPG Full-Stack E2E Flow (TZPSv2 Validation)', () => {
     assert.equal(profile.character.current_streak, 1, 'Streak persisted');
     assert.ok(profile.inventory.some(i => i.item_id === 'title-code-wizard'), 'Purchased item persisted in inventory');
   });
+
+  describe('Google OAuth 2.0 Security & Identity Resolution Tests', () => {
+    test('8. Google OAuth Status Endpoint', async () => {
+      const res = await fetch(`${BASE_URL}/auth/google/status`);
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      assert.equal(typeof data.configured, 'boolean');
+    });
+
+    test('9. Google OAuth Cancellation Handling', async () => {
+      // Simulate user clicking "Cancel" on Google consent screen
+      const res = await fetch(`${BASE_URL}/auth/google/callback?error=access_denied`, {
+        redirect: 'manual'
+      });
+      assert.equal(res.status, 302, 'Should redirect back to frontend');
+      const location = res.headers.get('location');
+      assert.ok(location.includes('auth_error=oauth_cancelled'), 'Should redirect with oauth_cancelled error');
+    });
+
+    test('10. Google OAuth CSRF State Protection', async () => {
+      // Missing or forged state parameter
+      const res = await fetch(`${BASE_URL}/auth/google/callback?code=mock_code&state=forged_state`, {
+        redirect: 'manual'
+      });
+      assert.equal(res.status, 302);
+      const location = res.headers.get('location');
+      assert.ok(location.includes('auth_error=invalid_oauth_state'), 'Should reject mismatched OAuth state');
+    });
+
+    test('11. First-Time Google User Resolution & RPG Initialization', async () => {
+      const googleProfile = {
+        email: `google_valiant_${Date.now()}@gmail.com`,
+        name: 'Sir Google Valiant',
+        sub: `google_sub_${Date.now()}`
+      };
+
+      const res = await fetch(`${BASE_URL}/auth/google/simulate-callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(googleProfile)
+      });
+
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      assert.ok(data.user.id, 'User ID must be assigned');
+      assert.equal(data.user.email, googleProfile.email);
+      assert.equal(data.character.character_name, googleProfile.name);
+      assert.equal(data.character.level, 1, 'Google user starts at level 1');
+      assert.equal(data.character.gold, 50, 'Google user receives 50 gold starting treasury');
+      assert.equal(data.attributes.length, 6, 'All 6 RPG attributes must be initialized');
+
+      // Check starter quests
+      const questsRes = await fetch(`${BASE_URL}/quests`, {
+        headers: { Authorization: `Bearer ${data.token}` }
+      });
+      const questsData = await questsRes.json();
+      assert.ok(questsData.quests.length >= 3, 'Google user should receive starter quests');
+
+      // 12. Returning Google User - Same Identity Preserved
+      const returnRes = await fetch(`${BASE_URL}/auth/google/simulate-callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(googleProfile)
+      });
+      assert.equal(returnRes.status, 200);
+      const returnData = await returnRes.json();
+      assert.equal(returnData.user.id, data.user.id, 'Existing Google user must retain the exact same user ID');
+      assert.equal(returnData.user.email, googleProfile.email);
+    });
+  });
 });

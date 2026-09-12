@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 import { db } from '../db/database.js';
 import { CONFIG } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -204,3 +205,216 @@ authRouter.get('/me', requireAuth, (req, res) => {
     return res.status(500).json({ error: 'Failed to retrieve profile.' });
   }
 });
+
+// GET /api/auth/google/status - Check if Google OAuth credentials are set
+authRouter.get('/google/status', (req, res) => {
+  const isConfigured = Boolean(CONFIG.GOOGLE_CLIENT_ID && CONFIG.GOOGLE_CLIENT_SECRET);
+  return res.json({ configured: isConfigured });
+});
+
+// GET /api/auth/google - Initiate Google OAuth flow
+authRouter.get('/google', (req, res) => {
+  if (!CONFIG.GOOGLE_CLIENT_ID || !CONFIG.GOOGLE_CLIENT_SECRET) {
+    return res.redirect('/?auth_error=google_not_configured');
+  }
+
+  const state = crypto.randomBytes(24).toString('hex');
+  res.cookie('oauth_state', state, {
+    httpOnly: true,
+    secure: CONFIG.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000 // 10 minutes
+  });
+
+  const rootUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+  const options = new URLSearchParams({
+    redirect_uri: CONFIG.GOOGLE_CALLBACK_URL,
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    access_type: 'offline',
+    response_type: 'code',
+    prompt: 'consent',
+    scope: [
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'openid'
+    ].join(' '),
+    state
+  });
+
+  return res.redirect(`${rootUrl}?${options.toString()}`);
+});
+
+// GET /api/auth/google/callback - Complete Google OAuth flow
+authRouter.get('/google/callback', async (req, res) => {
+  try {
+    const { code, state, error } = req.query;
+
+    if (error) {
+      res.clearCookie('oauth_state');
+      return res.redirect('/?auth_error=oauth_cancelled');
+    }
+
+    const storedState = req.cookies?.oauth_state;
+    if (!state || !storedState || state !== storedState) {
+      res.clearCookie('oauth_state');
+      return res.redirect('/?auth_error=invalid_oauth_state');
+    }
+    res.clearCookie('oauth_state');
+
+    // Exchange authorization code for tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: String(code),
+        client_id: CONFIG.GOOGLE_CLIENT_ID,
+        client_secret: CONFIG.GOOGLE_CLIENT_SECRET,
+        redirect_uri: CONFIG.GOOGLE_CALLBACK_URL,
+        grant_type: 'authorization_code'
+      })
+    });
+
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      console.error('[Google Token Exchange Failed]', errText);
+      return res.redirect('/?auth_error=token_exchange_failed');
+    }
+
+    const tokens = await tokenRes.json();
+
+    // Fetch user profile
+    const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
+    });
+
+    if (!userinfoRes.ok) {
+      return res.redirect('/?auth_error=userinfo_fetch_failed');
+    }
+
+    const googleUser = await userinfoRes.json();
+    if (!googleUser.email) {
+      return res.redirect('/?auth_error=no_email_provided');
+    }
+
+    // Process user in database
+    const userResult = await resolveGoogleUser(googleUser);
+    const token = generateToken(userResult);
+    res.cookie('token', token, COOKIE_OPTIONS);
+
+    return res.redirect('/?auth=success');
+  } catch (err) {
+    console.error('[Google Callback Error]', err);
+    return res.redirect('/?auth_error=server_error');
+  }
+});
+
+// Helper function to resolve or create Google authenticated user
+async function resolveGoogleUser(googleUser) {
+  const email = googleUser.email.trim().toLowerCase();
+  const sub = googleUser.sub;
+
+  let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(sub);
+
+  if (!user) {
+    user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(email);
+    if (user) {
+      db.prepare('UPDATE users SET google_id = ?, avatar_url = COALESCE(avatar_url, ?) WHERE id = ?')
+        .run(sub, googleUser.picture || null, user.id);
+    }
+  }
+
+  if (user) {
+    return user;
+  }
+
+  // New user creation
+  db.exec('BEGIN TRANSACTION;');
+  try {
+    let baseUsername = (googleUser.name || email.split('@')[0])
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .slice(0, 14);
+    if (baseUsername.length < 3) baseUsername = 'hero_' + Math.floor(1000 + Math.random() * 9000);
+
+    let finalUsername = baseUsername;
+    let counter = 1;
+    while (db.prepare('SELECT id FROM users WHERE LOWER(username) = ?').get(finalUsername.toLowerCase())) {
+      finalUsername = `${baseUsername.slice(0, 11)}_${counter++}`;
+    }
+
+    const dummyHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+    const insertUser = db.prepare(`
+      INSERT INTO users (username, email, password_hash, google_id, avatar_url)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const insertResult = insertUser.run(finalUsername, email, dummyHash, sub, googleUser.picture || null);
+    const userId = Number(insertResult.lastInsertRowid);
+
+    const heroName = googleUser.name || finalUsername;
+    db.prepare(`
+      INSERT INTO character_stats (user_id, character_name, avatar_class, level, current_xp, gold, current_streak, longest_streak)
+      VALUES (?, ?, 'WARRIOR', 1, 0, 50, 0, 0)
+    `).run(userId, heroName);
+
+    const attributes = ['INTELLECT', 'STRENGTH', 'DISCIPLINE', 'CREATIVITY', 'CHARISMA', 'ENDURANCE'];
+    const insertAttr = db.prepare('INSERT INTO attributes (user_id, attribute_name, level, points) VALUES (?, ?, 1, 0)');
+    for (const attr of attributes) {
+      insertAttr.run(userId, attr);
+    }
+
+    const insertInv = db.prepare('INSERT OR IGNORE INTO user_inventory (user_id, item_id) VALUES (?, ?)');
+    insertInv.run(userId, 'theme-obsidian');
+    insertInv.run(userId, 'title-novice');
+
+    const insertQuest = db.prepare(`
+      INSERT INTO quests (user_id, title, description, category, difficulty, priority, xp_reward, gold_reward, attribute_target)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertQuest.run(userId, 'Awaken Your Inner Hero', 'Complete your very first real-life task and explore the Life RPG interface.', 'MINDFULNESS', 'EASY', 'HIGH', 30, 10, 'DISCIPLINE');
+    insertQuest.run(userId, 'Code or Study for 30 Minutes', 'Engage in deep focus work or learn a new technical concept.', 'KNOWLEDGE', 'MEDIUM', 'HIGH', 65, 25, 'INTELLECT');
+    insertQuest.run(userId, 'Hydrate and Exercise', 'Drink 500ml water and complete 20 pushups or a 15-minute stretch.', 'FITNESS', 'EASY', 'MEDIUM', 30, 10, 'STRENGTH');
+
+    db.exec('COMMIT;');
+
+    return { id: userId, username: finalUsername, email };
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
+}
+
+// Development/Testing endpoint to simulate Google OAuth callback securely
+if (CONFIG.NODE_ENV !== 'production') {
+  authRouter.post('/google/simulate-callback', async (req, res) => {
+    try {
+      const { email, name, sub } = req.body;
+      if (!email || !sub) {
+        return res.status(400).json({ error: 'email and sub are required.' });
+      }
+
+      const user = await resolveGoogleUser({
+        email,
+        name: name || email.split('@')[0],
+        sub,
+        picture: `https://api.dicebear.com/7.x/bottts/svg?seed=${sub}`
+      });
+
+      const token = generateToken(user);
+      res.cookie('token', token, COOKIE_OPTIONS);
+
+      const character = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(user.id);
+      character.requiredXp = getRequiredXpForNextLevel(character.level);
+      const attributes = db.prepare('SELECT attribute_name, level, points FROM attributes WHERE user_id = ?').all(user.id);
+
+      return res.json({
+        user: { id: user.id, username: user.username, email: user.email },
+        character,
+        attributes,
+        token
+      });
+    } catch (err) {
+      console.error('[Simulate Google Error]', err);
+      return res.status(500).json({ error: 'Simulated OAuth failed' });
+    }
+  });
+}
+

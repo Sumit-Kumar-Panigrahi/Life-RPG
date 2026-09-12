@@ -21,7 +21,9 @@ export function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL COLLATE NOCASE,
       email TEXT UNIQUE NOT NULL COLLATE NOCASE,
-      password_hash TEXT NOT NULL,
+      password_hash TEXT,
+      google_id TEXT UNIQUE,
+      avatar_url TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -88,6 +90,17 @@ export function initDatabase() {
       UNIQUE(user_id, item_id)
     );
   `);
+
+  // Ensure google_id and avatar_url columns exist on existing databases
+  const userColumns = db.prepare("PRAGMA table_info(users)").all();
+  const colNames = new Set(userColumns.map(c => c.name));
+  if (!colNames.has('google_id')) {
+    db.exec("ALTER TABLE users ADD COLUMN google_id TEXT;");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;");
+  }
+  if (!colNames.has('avatar_url')) {
+    db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT;");
+  }
 
   // Seed default shop catalog if empty
   const itemCount = db.prepare('SELECT COUNT(*) as count FROM shop_items').get().count;

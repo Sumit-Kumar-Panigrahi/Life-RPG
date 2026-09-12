@@ -8,6 +8,8 @@ interface AuthContextType {
   attributes: Attribute[];
   inventory: InventoryItem[];
   loading: boolean;
+  oauthError: string | null;
+  clearOauthError: () => void;
   login: (credentials: { emailOrUsername: string; password: string }) => Promise<void>;
   signup: (data: {
     username: string;
@@ -30,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const applyTheme = (themeId: string) => {
     document.documentElement.setAttribute('data-theme', themeId || 'theme-obsidian');
@@ -56,6 +59,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authStatus = params.get('auth');
+    const authErr = params.get('auth_error');
+
+    if (authErr) {
+      if (authErr === 'oauth_cancelled') {
+        setOauthError('Google sign-in was cancelled by the user.');
+      } else if (authErr === 'google_not_configured') {
+        setOauthError('Google OAuth is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.');
+      } else {
+        setOauthError(`Google authentication encountered an error (${authErr}).`);
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    if (authStatus === 'success') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     refreshProfile();
   }, []);
 
@@ -127,6 +149,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         attributes,
         inventory,
         loading,
+        oauthError,
+        clearOauthError: () => setOauthError(null),
         login,
         signup,
         logout,

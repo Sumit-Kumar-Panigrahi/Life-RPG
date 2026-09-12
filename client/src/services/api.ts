@@ -82,7 +82,21 @@ export const api = {
         character: Character;
         attributes: Attribute[];
         inventory: InventoryItem[];
-      }>('/auth/me')
+      }>('/auth/me'),
+
+    getGoogleStatus: () =>
+      request<{ configured: boolean }>('/auth/google/status'),
+
+    simulateGoogleLogin: (body: { email: string; name?: string; sub: string }) =>
+      request<{
+        user: User;
+        character: Character;
+        attributes: Attribute[];
+        token: string;
+      }>('/auth/google/simulate-callback', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      })
   },
 
   quests: {

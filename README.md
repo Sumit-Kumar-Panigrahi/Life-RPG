@@ -13,6 +13,11 @@ Turn mundane real-life tasks into an engaging, non-linear RPG progression system
 - **Session Management**: Cryptographically signed JSON Web Tokens (JWT) stored in secure, `httpOnly`, `SameSite=Lax` cookies.
 - **Strict Authorization**: Server-side middleware verifies user ownership on every single query (`WHERE user_id = ?`). Client user IDs are never trusted.
 - **One-Click Instant Demo**: Instant guest adventurer creation for frictionless evaluation.
+- **Google OAuth 2.0 Integration**:
+  - Direct Authorization Code Flow with CSRF `state` protection.
+  - Automatic hero creation, attribute initialization, and profile linking.
+  - Preserves persistent character progression across returning Google sign-ins.
+  - Strict server-authoritative session creation with signed `httpOnly` cookies.
 
 ### 2. Real Persistent Database & Full CRUD (Concrete System #2)
 - **ACID Database Persistence**: Powered by SQLite via Node.js built-in `node:sqlite` engine (`server/data/liferpg.db`).
@@ -126,6 +131,40 @@ npm run build
 npm start
 ```
 Open `http://localhost:4000` in your browser.
+
+---
+
+## 🔑 Google OAuth 2.0 Setup Guide
+
+### 1. Google Cloud Console Configuration
+1. Navigate to the [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials).
+2. Create or select your project.
+3. Configure the **OAuth Consent Screen**:
+   - User type: **External**.
+   - App name: **Life RPG**.
+   - Scopes required: `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile`.
+4. Create an **OAuth 2.0 Client ID**:
+   - Application Type: **Web application**.
+   - Name: `Life RPG Web Client`.
+   - **Authorized JavaScript origins**:
+     - Local development: `http://localhost:4000`, `http://localhost:5173`
+     - Production: `https://<YOUR-PRODUCTION-DOMAIN>`
+   - **Authorized redirect URIs**:
+     - Local development: `http://localhost:4000/api/auth/google/callback`
+     - Production: `https://<YOUR-PRODUCTION-DOMAIN>/api/auth/google/callback`
+
+### 2. Configure Environment Variables
+In your local `.env` (or production host environment):
+```ini
+GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_CALLBACK_URL=http://localhost:4000/api/auth/google/callback
+```
+
+### 3. Verification & Fallback
+- When configured, clicking **"Continue with Google"** securely opens Google's consent dialog, automatically creates/links your character profile, and logs you into the realm.
+- If unconfigured, the application gracefully alerts the user with setup instructions without crashing.
+- For automated testing, the backend provides an identity simulation suite (`npm run test:server`) that validates Google identity creation and session persistence.
 
 ---
 
