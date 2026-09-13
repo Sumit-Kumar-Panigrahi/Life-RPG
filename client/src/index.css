@@ -1978,6 +1978,103 @@ html, body {
   background: var(--accent-gold);
 }
 
+/* ==========================================================================
+   NOTIFICATIONS POPOVER & LOWER DASHBOARD MOBILE RESPONSIVENESS
+   ========================================================================== */
+
+/* Notifications Popover Mobile Positioning */
+@media (max-width: 640px) {
+  .notifications-popover {
+    right: 0 !important;
+    left: auto !important;
+    width: calc(100vw - 1.5rem) !important;
+    max-width: 340px !important;
+    top: 50px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .notifications-popover {
+    width: calc(100vw - 1rem) !important;
+    right: -0.25rem !important;
+  }
+}
+
+/* Lower Dashboard ("niche wala") Fluid Responsiveness */
+@media (max-width: 768px) {
+  .dashboard-two-col {
+    margin: 0 0.75rem 1.25rem;
+    gap: 1rem;
+  }
+
+  .lower-dashboard-row {
+    margin: 0 0.75rem 2rem;
+    gap: 1rem;
+  }
+
+  .promo-banner {
+    padding: 1.15rem;
+    border-radius: var(--radius-md);
+  }
+
+  .promo-headline {
+    font-size: 1.15rem;
+    word-break: break-word;
+  }
+
+  .promo-body {
+    font-size: 0.85rem;
+  }
+
+  .promo-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .level-card-highlight {
+    padding: 1.15rem;
+    border-radius: var(--radius-md);
+  }
+
+  .level-card-header {
+    gap: 0.75rem;
+  }
+
+  .level-title-large {
+    font-size: 1.2rem;
+  }
+
+  .activity-card,
+  .rewards-card,
+  .inventory-card {
+    padding: 1.15rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-two-col {
+    margin: 0 0.5rem 1rem;
+  }
+
+  .lower-dashboard-row {
+    margin: 0 0.5rem 1.5rem;
+  }
+
+  .rewards-header-row {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .rewards-title {
+    font-size: 1rem;
+  }
+
+  .inventory-item-card {
+    padding: 0.55rem;
+  }
+}
+
+
 
 
 

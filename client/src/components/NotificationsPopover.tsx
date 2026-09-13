@@ -69,12 +69,13 @@ export const NotificationsPopover: React.FC<NotificationsPopoverProps> = ({
   return (
     <div
       ref={popoverRef}
-      className="glass-panel"
+      className="glass-panel notifications-popover"
       style={{
         position: 'absolute',
         top: '52px',
         right: '0',
-        width: '320px',
+        width: 'min(340px, calc(100vw - 1.5rem))',
+        maxWidth: 'calc(100vw - 1.5rem)',
         zIndex: 100,
         boxShadow: '0 12px 35px rgba(0, 0, 0, 0.75)',
         border: '1px solid var(--border-glow)',

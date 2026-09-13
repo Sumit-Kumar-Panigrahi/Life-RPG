@@ -206,13 +206,16 @@ export const App: React.FC = () => {
   // Delete Quest
   const handleDeleteQuest = async (id: number) => {
     sound.playClick();
-    if (window.confirm('Vanquish this quest permanently from your records?')) {
-      try {
-        await api.quests.deleteQuest(id);
-        await loadQuests();
-      } catch (err) {
-        console.error('[Delete Quest Error]', err);
-      }
+    try {
+      // Optimistically remove from state for instant responsive UX
+      setQuests(prev => prev.filter(q => q.id !== id));
+      setRecentCompleted(prev => prev.filter(q => q.id !== id));
+
+      await api.quests.deleteQuest(id);
+      await loadQuests();
+    } catch (err) {
+      console.error('[Delete Quest Error]', err);
+      await loadQuests(); // Revert on failure
     }
   };
 

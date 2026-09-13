@@ -40,6 +40,8 @@ export const QuestCard: React.FC<QuestCardProps> = ({
   onDelete,
   isCompleting = false
 }) => {
+  const [isConfirmingDelete, setIsConfirmingDelete] = React.useState(false);
+
   const catConfig = CATEGORY_CONFIG[quest.category] || CATEGORY_CONFIG.KNOWLEDGE;
   const CategoryIcon = catConfig.icon;
   const isCompleted = quest.is_completed === 1;
@@ -58,6 +60,25 @@ export const QuestCard: React.FC<QuestCardProps> = ({
   const handleCompleteClick = (e: React.MouseEvent) => {
     sound.playQuestComplete();
     onComplete(quest.id, e);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    sound.playClick();
+    setIsConfirmingDelete(true);
+  };
+
+  const handleConfirmDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    sound.playClick();
+    setIsConfirmingDelete(false);
+    onDelete(quest.id);
+  };
+
+  const handleCancelDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    sound.playClick();
+    setIsConfirmingDelete(false);
   };
 
   return (
@@ -167,12 +188,32 @@ export const QuestCard: React.FC<QuestCardProps> = ({
 
         {/* Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          {!isCompleted ? (
+          {isConfirmingDelete ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(239, 68, 68, 0.15)', padding: '0.25rem 0.45rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
+              <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 800 }}>Delete?</span>
+              <button
+                type="button"
+                className="btn"
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem', background: '#ef4444', color: '#ffffff', minHeight: 'auto' }}
+                onClick={handleConfirmDelete}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem', background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-secondary)', minHeight: 'auto' }}
+                onClick={handleCancelDelete}
+              >
+                No
+              </button>
+            </div>
+          ) : !isCompleted ? (
             <>
               <button
                 type="button"
                 className="btn btn-icon"
-                onClick={() => onEdit(quest)}
+                onClick={(e) => { e.stopPropagation(); onEdit(quest); }}
                 aria-label={`Edit ${quest.title}`}
                 title="Edit Quest"
               >
@@ -182,7 +223,7 @@ export const QuestCard: React.FC<QuestCardProps> = ({
               <button
                 type="button"
                 className="btn btn-icon"
-                onClick={() => onDelete(quest.id)}
+                onClick={handleDeleteClick}
                 aria-label={`Abandon ${quest.title}`}
                 title="Vanquish Quest from Board"
               >
@@ -218,7 +259,7 @@ export const QuestCard: React.FC<QuestCardProps> = ({
               <button
                 type="button"
                 className="btn btn-icon"
-                onClick={() => onDelete(quest.id)}
+                onClick={handleDeleteClick}
                 title="Delete quest history"
                 aria-label="Delete completed quest"
               >
