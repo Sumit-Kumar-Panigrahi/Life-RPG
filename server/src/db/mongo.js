@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { CONFIG } from '../config.js';
-import { seedMongoShopCatalog } from './models.js';
+import { UserDoc, seedMongoShopCatalog } from './models.js';
 
 let isConnected = false;
 
@@ -19,6 +19,9 @@ export async function connectMongoDB() {
 
     isConnected = true;
     console.log('[Database] 🚀 Successfully connected to MongoDB Atlas Cloud Cluster!');
+
+    // Sync schema indexes (ensures google_id sparse unique index is properly configured)
+    await UserDoc.syncIndexes();
 
     // Seed default shop items if first time
     await seedMongoShopCatalog();

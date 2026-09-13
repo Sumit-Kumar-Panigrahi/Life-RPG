@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { db } from './database.js';
 import { isMongoActive } from './mongo.js';
 import {
@@ -14,7 +15,10 @@ import {
 // ==========================================
 export async function dbFindUserById(id) {
   if (isMongoActive()) {
-    return await UserDoc.findById(id).lean();
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+    const u = await UserDoc.findById(id).lean();
+    if (u) u.id = u._id.toString();
+    return u;
   }
   return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 }
@@ -54,13 +58,15 @@ export async function dbInitializeUserAccount({ username, email, password_hash, 
   const heroClass = ['WARRIOR', 'MAGE', 'ROGUE', 'PALADIN'].includes(avatarClass) ? avatarClass : 'WARRIOR';
 
   if (isMongoActive()) {
-    const user = await UserDoc.create({
+    const userData = {
       username: cleanUsername,
-      email: cleanEmail,
-      password_hash: password_hash || null,
-      google_id: google_id || null,
-      avatar_url: avatar_url || null
-    });
+      email: cleanEmail
+    };
+    if (password_hash) userData.password_hash = password_hash;
+    if (google_id) userData.google_id = google_id;
+    if (avatar_url) userData.avatar_url = avatar_url;
+
+    const user = await UserDoc.create(userData);
     const userId = user._id;
 
     await CharacterStatsDoc.create({
@@ -303,6 +309,7 @@ export async function dbGetQuests(userId, filters = {}) {
 
 export async function dbGetQuestById(id, userId) {
   if (isMongoActive()) {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const q = await QuestDoc.findOne({ _id: id, user_id: userId }).lean();
     if (q) q.id = q._id.toString();
     return q;
@@ -338,6 +345,7 @@ export async function dbCreateQuest(questData) {
 
 export async function dbUpdateQuest(id, userId, fields) {
   if (isMongoActive()) {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const updated = await QuestDoc.findOneAndUpdate({ _id: id, user_id: userId }, fields, { new: true }).lean();
     if (updated) updated.id = updated._id.toString();
     return updated;
@@ -351,6 +359,7 @@ export async function dbUpdateQuest(id, userId, fields) {
 
 export async function dbDeleteQuest(id, userId) {
   if (isMongoActive()) {
+    if (!mongoose.Types.ObjectId.isValid(id)) return false;
     const res = await QuestDoc.deleteOne({ _id: id, user_id: userId });
     return res.deletedCount > 0;
   }
