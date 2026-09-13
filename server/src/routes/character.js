@@ -1,41 +1,44 @@
 import express from 'express';
-import { db } from '../db/database.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getRequiredXpForNextLevel } from '../utils/rpgEngine.js';
+import {
+  dbGetCharacterByUserId,
+  dbUpdateCharacter,
+  dbGetAttributesByUserId,
+  dbGetQuests,
+  dbGetShopItemById,
+  dbGetShopItems,
+  dbGetUserInventory
+} from '../db/dbService.js';
 
 export const characterRouter = express.Router();
 
 characterRouter.use(requireAuth);
 
 // GET /api/character - Retrieve character details, stats, attributes
-characterRouter.get('/', (req, res) => {
+characterRouter.get('/', async (req, res) => {
   try {
-    const character = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(req.user.id);
+    const character = await dbGetCharacterByUserId(req.user.id);
     if (!character) {
       return res.status(404).json({ error: 'Character not found.' });
     }
 
     character.requiredXp = getRequiredXpForNextLevel(character.level);
 
-    const attributes = db.prepare('SELECT attribute_name, level, points FROM attributes WHERE user_id = ?').all(req.user.id);
+    const attributes = await dbGetAttributesByUserId(req.user.id);
+    const quests = await dbGetQuests(req.user.id);
 
-    // Get quest counts for statistics
-    const stats = db.prepare(`
-      SELECT
-        COUNT(*) as totalQuests,
-        SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completedQuests,
-        SUM(CASE WHEN is_completed = 0 THEN 1 ELSE 0 END) as activeQuests
-      FROM quests
-      WHERE user_id = ?
-    `).get(req.user.id);
+    const totalQuests = quests.length;
+    const completedQuests = quests.filter(q => q.is_completed === 1).length;
+    const activeQuests = totalQuests - completedQuests;
 
     return res.json({
       character,
       attributes,
       stats: {
-        totalQuests: stats.totalQuests || 0,
-        completedQuests: stats.completedQuests || 0,
-        activeQuests: stats.activeQuests || 0
+        totalQuests,
+        completedQuests,
+        activeQuests
       }
     });
   } catch (error) {
@@ -45,10 +48,10 @@ characterRouter.get('/', (req, res) => {
 });
 
 // PUT /api/character - Customize character profile & equipment
-characterRouter.put('/', (req, res) => {
+characterRouter.put('/', async (req, res) => {
   try {
     const { characterName, avatarClass, activeTitle, activeTheme } = req.body;
-    const existing = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(req.user.id);
+    const existing = await dbGetCharacterByUserId(req.user.id);
 
     if (!existing) {
       return res.status(404).json({ error: 'Character not found.' });
@@ -74,13 +77,14 @@ characterRouter.put('/', (req, res) => {
 
     let cleanTitle = existing.active_title;
     if (activeTitle !== undefined && activeTitle !== existing.active_title) {
-      // Verify ownership in shop_items and user_inventory (or default novice)
       if (activeTitle !== 'Novice Adventurer') {
-        const item = db.prepare('SELECT id FROM shop_items WHERE name = ? AND category = "TITLE"').get(activeTitle);
+        const allItems = await dbGetShopItems();
+        const item = allItems.find(i => i.name === activeTitle && i.category === 'TITLE');
         if (!item) {
           return res.status(400).json({ error: 'Title does not exist in realm catalog.' });
         }
-        const owned = db.prepare('SELECT id FROM user_inventory WHERE user_id = ? AND item_id = ?').get(req.user.id, item.id);
+        const userInventory = await dbGetUserInventory(req.user.id);
+        const owned = userInventory.some(i => i.item_id === item.id);
         if (!owned) {
           return res.status(403).json({ error: 'You do not own this heroic title.' });
         }
@@ -90,13 +94,13 @@ characterRouter.put('/', (req, res) => {
 
     let cleanTheme = existing.active_theme;
     if (activeTheme !== undefined && activeTheme !== existing.active_theme) {
-      // Verify ownership in shop_items and user_inventory (or default obsidian)
       if (activeTheme !== 'theme-obsidian') {
-        const item = db.prepare('SELECT id FROM shop_items WHERE id = ? AND category = "THEME"').get(activeTheme);
-        if (!item) {
+        const item = await dbGetShopItemById(activeTheme);
+        if (!item || item.category !== 'THEME') {
           return res.status(400).json({ error: 'Theme does not exist in realm catalog.' });
         }
-        const owned = db.prepare('SELECT id FROM user_inventory WHERE user_id = ? AND item_id = ?').get(req.user.id, item.id);
+        const userInventory = await dbGetUserInventory(req.user.id);
+        const owned = userInventory.some(i => i.item_id === item.id);
         if (!owned) {
           return res.status(403).json({ error: 'You do not own this visual armor theme.' });
         }
@@ -104,15 +108,15 @@ characterRouter.put('/', (req, res) => {
       cleanTheme = activeTheme;
     }
 
-    db.prepare(`
-      UPDATE character_stats
-      SET character_name = ?, avatar_class = ?, active_title = ?, active_theme = ?, updated_at = datetime('now')
-      WHERE user_id = ?
-    `).run(cleanName, cleanClass, cleanTitle, cleanTheme, req.user.id);
+    const updated = await dbUpdateCharacter(req.user.id, {
+      character_name: cleanName,
+      avatar_class: cleanClass,
+      active_title: cleanTitle,
+      active_theme: cleanTheme
+    });
 
-    const updated = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(req.user.id);
     updated.requiredXp = getRequiredXpForNextLevel(updated.level);
-    const attributes = db.prepare('SELECT attribute_name, level, points FROM attributes WHERE user_id = ?').all(req.user.id);
+    const attributes = await dbGetAttributesByUserId(req.user.id);
 
     return res.json({ character: updated, attributes });
   } catch (error) {

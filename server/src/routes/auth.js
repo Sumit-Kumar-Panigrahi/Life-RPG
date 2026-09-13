@@ -2,10 +2,21 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
-import { db } from '../db/database.js';
 import { CONFIG } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getRequiredXpForNextLevel } from '../utils/rpgEngine.js';
+import {
+  dbFindUserById,
+  dbFindUserByEmail,
+  dbFindUserByUsername,
+  dbFindUserByGoogleId,
+  dbFindUserByResetToken,
+  dbInitializeUserAccount,
+  dbUpdateUser,
+  dbGetCharacterByUserId,
+  dbGetAttributesByUserId,
+  dbGetUserInventory
+} from '../db/dbService.js';
 
 export const authRouter = express.Router();
 
@@ -17,8 +28,9 @@ const COOKIE_OPTIONS = {
 };
 
 function generateToken(user) {
+  const userId = user.id || user._id;
   return jwt.sign(
-    { id: user.id, username: user.username, email: user.email },
+    { id: userId, username: user.username, email: user.email },
     CONFIG.JWT_SECRET,
     { expiresIn: CONFIG.JWT_EXPIRES_IN }
   );
@@ -53,72 +65,39 @@ authRouter.post('/signup', async (req, res) => {
     }
 
     // Check duplicate
-    const existing = db.prepare('SELECT id, username, email FROM users WHERE username = ? OR email = ?').get(cleanUsername, cleanEmail);
-    if (existing) {
-      if (existing.username.toLowerCase() === cleanUsername.toLowerCase()) {
-        return res.status(409).json({ error: 'Username is already taken.' });
-      }
+    const existingUser = await dbFindUserByUsername(cleanUsername);
+    if (existingUser) {
+      return res.status(409).json({ error: 'Username is already taken.' });
+    }
+    const existingEmail = await dbFindUserByEmail(cleanEmail);
+    if (existingEmail) {
       return res.status(409).json({ error: 'Email is already registered.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const heroName = characterName?.trim() || cleanUsername;
-    const heroClass = ['WARRIOR', 'MAGE', 'ROGUE', 'PALADIN'].includes(avatarClass) ? avatarClass : 'WARRIOR';
+    const user = await dbInitializeUserAccount({
+      username: cleanUsername,
+      email: cleanEmail,
+      password_hash: passwordHash,
+      characterName,
+      avatarClass
+    });
 
-    // Execute atomic user and character creation in a transaction
-    db.exec('BEGIN TRANSACTION;');
-    try {
-      const insertUser = db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)');
-      const userResult = insertUser.run(cleanUsername, cleanEmail, passwordHash);
-      const userId = Number(userResult.lastInsertRowid);
+    const userId = user.id || user._id;
+    const token = generateToken({ id: userId, username: user.username, email: user.email });
+    res.cookie('token', token, COOKIE_OPTIONS);
 
-      const insertStats = db.prepare(`
-        INSERT INTO character_stats (user_id, character_name, avatar_class, level, current_xp, gold, current_streak, longest_streak)
-        VALUES (?, ?, ?, 1, 0, 50, 0, 0)
-      `);
-      insertStats.run(userId, heroName, heroClass);
+    const character = await dbGetCharacterByUserId(userId);
+    character.requiredXp = getRequiredXpForNextLevel(character.level);
 
-      // Initialize all 6 attributes
-      const attributes = ['INTELLECT', 'STRENGTH', 'DISCIPLINE', 'CREATIVITY', 'CHARISMA', 'ENDURANCE'];
-      const insertAttr = db.prepare('INSERT INTO attributes (user_id, attribute_name, level, points) VALUES (?, ?, 1, 0)');
-      for (const attr of attributes) {
-        insertAttr.run(userId, attr);
-      }
+    const userAttributes = await dbGetAttributesByUserId(userId);
 
-      // Grant default items
-      const insertInv = db.prepare('INSERT OR IGNORE INTO user_inventory (user_id, item_id) VALUES (?, ?)');
-      insertInv.run(userId, 'theme-obsidian');
-      insertInv.run(userId, 'title-novice');
-
-      // Seed starter welcome quests for the new adventurer
-      const insertQuest = db.prepare(`
-        INSERT INTO quests (user_id, title, description, category, difficulty, priority, xp_reward, gold_reward, attribute_target)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      insertQuest.run(userId, 'Awaken Your Inner Hero', 'Complete your very first real-life task and explore the Life RPG interface.', 'MINDFULNESS', 'EASY', 'HIGH', 30, 10, 'DISCIPLINE');
-      insertQuest.run(userId, 'Code or Study for 30 Minutes', 'Engage in deep focus work or learn a new technical concept.', 'KNOWLEDGE', 'MEDIUM', 'HIGH', 65, 25, 'INTELLECT');
-      insertQuest.run(userId, 'Hydrate and Exercise', 'Drink 500ml water and complete 20 pushups or a 15-minute stretch.', 'FITNESS', 'EASY', 'MEDIUM', 30, 10, 'STRENGTH');
-
-      db.exec('COMMIT;');
-
-      const token = generateToken({ id: userId, username: cleanUsername, email: cleanEmail });
-      res.cookie('token', token, COOKIE_OPTIONS);
-
-      const character = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(userId);
-      character.requiredXp = getRequiredXpForNextLevel(character.level);
-
-      const userAttributes = db.prepare('SELECT attribute_name, level, points FROM attributes WHERE user_id = ?').all(userId);
-
-      return res.status(201).json({
-        user: { id: userId, username: cleanUsername, email: cleanEmail },
-        character,
-        attributes: userAttributes,
-        token
-      });
-    } catch (err) {
-      db.exec('ROLLBACK;');
-      throw err;
-    }
+    return res.status(201).json({
+      user: { id: userId, username: user.username, email: user.email },
+      character,
+      attributes: userAttributes,
+      token
+    });
   } catch (error) {
     console.error('[Auth Signup Error]', error);
     return res.status(500).json({ error: 'Server error during signup. Please try again.' });
@@ -135,27 +114,31 @@ authRouter.post('/login', async (req, res) => {
     }
 
     const identifier = emailOrUsername.trim().toLowerCase();
-    const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?').get(identifier, identifier);
+    let user = await dbFindUserByEmail(identifier);
+    if (!user) {
+      user = await dbFindUserByUsername(identifier);
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials. User not found.' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password_hash);
+    const isMatch = await bcrypt.compare(password, user.password_hash || '');
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials. Password incorrect.' });
     }
 
-    const token = generateToken(user);
+    const userId = user.id || user._id;
+    const token = generateToken({ id: userId, username: user.username, email: user.email });
     res.cookie('token', token, COOKIE_OPTIONS);
 
-    const character = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(user.id);
+    const character = await dbGetCharacterByUserId(userId);
     character.requiredXp = getRequiredXpForNextLevel(character.level);
 
-    const userAttributes = db.prepare('SELECT attribute_name, level, points FROM attributes WHERE user_id = ?').all(user.id);
+    const userAttributes = await dbGetAttributesByUserId(userId);
 
     return res.json({
-      user: { id: user.id, username: user.username, email: user.email },
+      user: { id: userId, username: user.username, email: user.email },
       character,
       attributes: userAttributes,
       token
@@ -173,29 +156,25 @@ authRouter.post('/logout', (req, res) => {
 });
 
 // GET /api/auth/me (Full profile & persistence verification)
-authRouter.get('/me', requireAuth, (req, res) => {
+authRouter.get('/me', requireAuth, async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(req.user.id);
+    const user = await dbFindUserById(req.user.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    const character = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(req.user.id);
+    const character = await dbGetCharacterByUserId(req.user.id);
     if (!character) {
       return res.status(404).json({ error: 'Character data missing.' });
     }
     character.requiredXp = getRequiredXpForNextLevel(character.level);
 
-    const attributes = db.prepare('SELECT attribute_name, level, points FROM attributes WHERE user_id = ?').all(req.user.id);
-    const inventory = db.prepare(`
-      SELECT i.item_id, s.name, s.description, s.category, s.icon, i.acquired_at
-      FROM user_inventory i
-      JOIN shop_items s ON i.item_id = s.id
-      WHERE i.user_id = ?
-    `).all(req.user.id);
+    const attributes = await dbGetAttributesByUserId(req.user.id);
+    const inventory = await dbGetUserInventory(req.user.id);
 
+    const userId = user.id || user._id;
     return res.json({
-      user,
+      user: { id: userId, username: user.username, email: user.email, created_at: user.created_at },
       character,
       attributes,
       inventory
@@ -207,10 +186,10 @@ authRouter.get('/me', requireAuth, (req, res) => {
 });
 
 // PUT /api/auth/profile - Update account username and email
-authRouter.put('/profile', requireAuth, (req, res) => {
+authRouter.put('/profile', requireAuth, async (req, res) => {
   try {
     const { username, email } = req.body;
-    const currentUser = db.prepare('SELECT id, username, email FROM users WHERE id = ?').get(req.user.id);
+    const currentUser = await dbFindUserById(req.user.id);
     if (!currentUser) {
       return res.status(404).json({ error: 'User not found.' });
     }
@@ -225,9 +204,9 @@ authRouter.put('/profile', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'Username may only contain letters, numbers, and underscores.' });
       }
 
-      // Check uniqueness against other users
-      const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?').get(cleanUsername, req.user.id);
-      if (existingUser) {
+      const existingUser = await dbFindUserByUsername(cleanUsername);
+      const existingId = existingUser ? (existingUser.id || existingUser._id?.toString()) : null;
+      if (existingUser && existingId !== req.user.id.toString()) {
         return res.status(409).json({ error: 'This hero username is already claimed.' });
       }
       newUsername = cleanUsername;
@@ -240,29 +219,28 @@ authRouter.put('/profile', requireAuth, (req, res) => {
         return res.status(400).json({ error: 'Please enter a valid email address.' });
       }
 
-      // Check uniqueness against other users
-      const existingEmail = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?').get(cleanEmail, req.user.id);
-      if (existingEmail) {
+      const existingEmail = await dbFindUserByEmail(cleanEmail);
+      const existingId = existingEmail ? (existingEmail.id || existingEmail._id?.toString()) : null;
+      if (existingEmail && existingId !== req.user.id.toString()) {
         return res.status(409).json({ error: 'This email address is already registered.' });
       }
       newEmail = cleanEmail;
     }
 
-    db.prepare('UPDATE users SET username = ?, email = ? WHERE id = ?').run(newUsername, newEmail, req.user.id);
+    const updatedUser = await dbUpdateUser(req.user.id, { username: newUsername, email: newEmail });
 
-    // Refresh JWT token with updated username/email
     const token = generateToken({ id: req.user.id, username: newUsername, email: newEmail });
     res.cookie('token', token, COOKIE_OPTIONS);
 
-    const updatedUser = db.prepare('SELECT id, username, email, created_at FROM users WHERE id = ?').get(req.user.id);
-    const updatedChar = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(req.user.id);
+    const updatedChar = await dbGetCharacterByUserId(req.user.id);
     if (updatedChar) {
       updatedChar.requiredXp = getRequiredXpForNextLevel(updatedChar.level);
     }
 
+    const userId = updatedUser.id || updatedUser._id;
     return res.json({
       message: 'Account profile updated successfully.',
-      user: updatedUser,
+      user: { id: userId, username: updatedUser.username, email: updatedUser.email },
       character: updatedChar
     });
   } catch (error) {
@@ -280,17 +258,20 @@ authRouter.post('/forgot-password', async (req, res) => {
     }
 
     const identifier = emailOrUsername.trim().toLowerCase();
-    const user = db.prepare('SELECT id, username, email, google_id FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?').get(identifier, identifier);
+    let user = await dbFindUserByEmail(identifier);
+    if (!user) {
+      user = await dbFindUserByUsername(identifier);
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'No adventurer account found with that username or email.' });
     }
 
-    // Generate 6-digit reset code & 15-minute expiration
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = (Date.now() + 15 * 60 * 1000).toString();
 
-    db.prepare('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?').run(resetCode, expiresAt, user.id);
+    const userId = user.id || user._id;
+    await dbUpdateUser(userId, { reset_token: resetCode, reset_token_expires: expiresAt });
 
     console.log(`[Auth Reset Password Code] User: ${user.username} (${user.email}) -> Reset Code: ${resetCode}`);
 
@@ -319,7 +300,10 @@ authRouter.post('/reset-password', async (req, res) => {
     }
 
     const identifier = emailOrUsername.trim().toLowerCase();
-    const user = db.prepare('SELECT id, username, reset_token, reset_token_expires FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?').get(identifier, identifier);
+    let user = await dbFindUserByEmail(identifier);
+    if (!user) {
+      user = await dbFindUserByUsername(identifier);
+    }
 
     if (!user || !user.reset_token) {
       return res.status(400).json({ error: 'Invalid password reset request or code expired.' });
@@ -336,9 +320,9 @@ authRouter.post('/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Password reset code has expired. Please request a new code.' });
     }
 
-    // Hash new password and clear reset token
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    db.prepare('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?').run(passwordHash, user.id);
+    const userId = user.id || user._id;
+    await dbUpdateUser(userId, { password_hash: passwordHash, reset_token: null, reset_token_expires: null });
 
     return res.json({ message: 'Your password has been successfully reset! You can now sign in.' });
   } catch (error) {
@@ -356,12 +340,11 @@ authRouter.put('/change-password', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
     }
 
-    const user = db.prepare('SELECT id, password_hash FROM users WHERE id = ?').get(req.user.id);
+    const user = await dbFindUserById(req.user.id);
     if (!user) {
       return res.status(404).json({ error: 'User account not found.' });
     }
 
-    // If user has existing password, verify current password
     if (user.password_hash) {
       if (!currentPassword) {
         return res.status(400).json({ error: 'Please enter your current password.' });
@@ -373,7 +356,7 @@ authRouter.put('/change-password', requireAuth, async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.id);
+    await dbUpdateUser(req.user.id, { password_hash: passwordHash });
 
     return res.json({ message: 'Password updated successfully!' });
   } catch (error) {
@@ -382,13 +365,13 @@ authRouter.put('/change-password', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/auth/google/status - Check if Google OAuth credentials are set
+// GET /api/auth/google/status
 authRouter.get('/google/status', (req, res) => {
   const isConfigured = Boolean(CONFIG.GOOGLE_CLIENT_ID && CONFIG.GOOGLE_CLIENT_SECRET);
   return res.json({ configured: isConfigured });
 });
 
-// GET /api/auth/google - Initiate Google OAuth flow
+// GET /api/auth/google
 authRouter.get('/google', (req, res) => {
   if (!CONFIG.GOOGLE_CLIENT_ID || !CONFIG.GOOGLE_CLIENT_SECRET) {
     return res.redirect('/?auth_error=google_not_configured');
@@ -399,7 +382,7 @@ authRouter.get('/google', (req, res) => {
     httpOnly: true,
     secure: CONFIG.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 10 * 60 * 1000 // 10 minutes
+    maxAge: 10 * 60 * 1000
   });
 
   const rootUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -420,7 +403,7 @@ authRouter.get('/google', (req, res) => {
   return res.redirect(`${rootUrl}?${options.toString()}`);
 });
 
-// GET /api/auth/google/callback - Complete Google OAuth flow
+// GET /api/auth/google/callback
 authRouter.get('/google/callback', async (req, res) => {
   try {
     const { code, state, error } = req.query;
@@ -437,7 +420,6 @@ authRouter.get('/google/callback', async (req, res) => {
     }
     res.clearCookie('oauth_state');
 
-    // Exchange authorization code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -454,24 +436,10 @@ authRouter.get('/google/callback', async (req, res) => {
       const errText = await tokenRes.text();
       let parsed = {};
       try { parsed = JSON.parse(errText); } catch {}
-      console.error('[Google Token Exchange Failed Diagnostic]', {
-        httpStatus: tokenRes.status,
-        oauthError: parsed.error || 'unknown',
-        errorDescription: parsed.error_description || errText,
-        callbackUrlSent: CONFIG.GOOGLE_CALLBACK_URL,
-        clientIdPresent: Boolean(CONFIG.GOOGLE_CLIENT_ID),
-        clientIdMasked: CONFIG.GOOGLE_CLIENT_ID ? `${CONFIG.GOOGLE_CLIENT_ID.slice(0, 12)}...${CONFIG.GOOGLE_CLIENT_ID.slice(-25)}` : 'MISSING',
-        clientSecretPresent: Boolean(CONFIG.GOOGLE_CLIENT_SECRET) ? 'YES' : 'NO',
-        clientSecretLength: CONFIG.GOOGLE_CLIENT_SECRET ? CONFIG.GOOGLE_CLIENT_SECRET.length : 0,
-        isPlaceholderSecret: CONFIG.GOOGLE_CLIENT_SECRET === 'YOUR_NEW_SECRET'
-      });
-      const errorCategory = parsed.error || 'token_exchange_failed';
-      return res.redirect(`/?auth_error=${encodeURIComponent(errorCategory)}&error_desc=${encodeURIComponent(parsed.error_description || '')}`);
+      return res.redirect(`/?auth_error=${encodeURIComponent(parsed.error || 'token_exchange_failed')}&error_desc=${encodeURIComponent(parsed.error_description || '')}`);
     }
 
     const tokens = await tokenRes.json();
-
-    // Fetch user profile
     const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${tokens.access_token}` }
     });
@@ -485,7 +453,6 @@ authRouter.get('/google/callback', async (req, res) => {
       return res.redirect('/?auth_error=no_email_provided');
     }
 
-    // Process user in database
     const userResult = await resolveGoogleUser(googleUser);
     const token = generateToken(userResult);
     res.cookie('token', token, COOKIE_OPTIONS);
@@ -497,81 +464,50 @@ authRouter.get('/google/callback', async (req, res) => {
   }
 });
 
-// Helper function to resolve or create Google authenticated user
 async function resolveGoogleUser(googleUser) {
   const email = googleUser.email.trim().toLowerCase();
   const sub = googleUser.sub;
 
-  let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(sub);
-
+  let user = await dbFindUserByGoogleId(sub);
   if (!user) {
-    user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(email);
+    user = await dbFindUserByEmail(email);
     if (user) {
-      db.prepare('UPDATE users SET google_id = ?, avatar_url = COALESCE(avatar_url, ?) WHERE id = ?')
-        .run(sub, googleUser.picture || null, user.id);
+      const userId = user.id || user._id;
+      user = await dbUpdateUser(userId, { google_id: sub, avatar_url: googleUser.picture || user.avatar_url });
     }
   }
 
   if (user) {
-    return user;
+    const userId = user.id || user._id;
+    return { id: userId, username: user.username, email: user.email };
   }
 
-  // New user creation
-  db.exec('BEGIN TRANSACTION;');
-  try {
-    let baseUsername = (googleUser.name || email.split('@')[0])
-      .replace(/[^a-zA-Z0-9_]/g, '')
-      .slice(0, 14);
-    if (baseUsername.length < 3) baseUsername = 'hero_' + Math.floor(1000 + Math.random() * 9000);
+  let baseUsername = (googleUser.name || email.split('@')[0])
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .slice(0, 14);
+  if (baseUsername.length < 3) baseUsername = 'hero_' + Math.floor(1000 + Math.random() * 9000);
 
-    let finalUsername = baseUsername;
-    let counter = 1;
-    while (db.prepare('SELECT id FROM users WHERE LOWER(username) = ?').get(finalUsername.toLowerCase())) {
-      finalUsername = `${baseUsername.slice(0, 11)}_${counter++}`;
-    }
-
-    const dummyHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
-    const insertUser = db.prepare(`
-      INSERT INTO users (username, email, password_hash, google_id, avatar_url)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    const insertResult = insertUser.run(finalUsername, email, dummyHash, sub, googleUser.picture || null);
-    const userId = Number(insertResult.lastInsertRowid);
-
-    const heroName = googleUser.name || finalUsername;
-    db.prepare(`
-      INSERT INTO character_stats (user_id, character_name, avatar_class, level, current_xp, gold, current_streak, longest_streak)
-      VALUES (?, ?, 'WARRIOR', 1, 0, 50, 0, 0)
-    `).run(userId, heroName);
-
-    const attributes = ['INTELLECT', 'STRENGTH', 'DISCIPLINE', 'CREATIVITY', 'CHARISMA', 'ENDURANCE'];
-    const insertAttr = db.prepare('INSERT INTO attributes (user_id, attribute_name, level, points) VALUES (?, ?, 1, 0)');
-    for (const attr of attributes) {
-      insertAttr.run(userId, attr);
-    }
-
-    const insertInv = db.prepare('INSERT OR IGNORE INTO user_inventory (user_id, item_id) VALUES (?, ?)');
-    insertInv.run(userId, 'theme-obsidian');
-    insertInv.run(userId, 'title-novice');
-
-    const insertQuest = db.prepare(`
-      INSERT INTO quests (user_id, title, description, category, difficulty, priority, xp_reward, gold_reward, attribute_target)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    insertQuest.run(userId, 'Awaken Your Inner Hero', 'Complete your very first real-life task and explore the Life RPG interface.', 'MINDFULNESS', 'EASY', 'HIGH', 30, 10, 'DISCIPLINE');
-    insertQuest.run(userId, 'Code or Study for 30 Minutes', 'Engage in deep focus work or learn a new technical concept.', 'KNOWLEDGE', 'MEDIUM', 'HIGH', 65, 25, 'INTELLECT');
-    insertQuest.run(userId, 'Hydrate and Exercise', 'Drink 500ml water and complete 20 pushups or a 15-minute stretch.', 'FITNESS', 'EASY', 'MEDIUM', 30, 10, 'STRENGTH');
-
-    db.exec('COMMIT;');
-
-    return { id: userId, username: finalUsername, email };
-  } catch (err) {
-    db.exec('ROLLBACK;');
-    throw err;
+  let finalUsername = baseUsername;
+  let counter = 1;
+  while (await dbFindUserByUsername(finalUsername)) {
+    finalUsername = `${baseUsername.slice(0, 11)}_${counter++}`;
   }
+
+  const dummyHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+  const newUser = await dbInitializeUserAccount({
+    username: finalUsername,
+    email,
+    password_hash: dummyHash,
+    google_id: sub,
+    avatar_url: googleUser.picture || null,
+    characterName: googleUser.name || finalUsername,
+    avatarClass: 'WARRIOR'
+  });
+
+  const userId = newUser.id || newUser._id;
+  return { id: userId, username: finalUsername, email };
 }
 
-// Development/Testing endpoint to simulate Google OAuth callback securely
 if (CONFIG.NODE_ENV !== 'production') {
   authRouter.post('/google/simulate-callback', async (req, res) => {
     try {
@@ -590,9 +526,9 @@ if (CONFIG.NODE_ENV !== 'production') {
       const token = generateToken(user);
       res.cookie('token', token, COOKIE_OPTIONS);
 
-      const character = db.prepare('SELECT * FROM character_stats WHERE user_id = ?').get(user.id);
+      const character = await dbGetCharacterByUserId(user.id);
       character.requiredXp = getRequiredXpForNextLevel(character.level);
-      const attributes = db.prepare('SELECT attribute_name, level, points FROM attributes WHERE user_id = ?').all(user.id);
+      const attributes = await dbGetAttributesByUserId(user.id);
 
       return res.json({
         user: { id: user.id, username: user.username, email: user.email },
@@ -606,4 +542,3 @@ if (CONFIG.NODE_ENV !== 'production') {
     }
   });
 }
-

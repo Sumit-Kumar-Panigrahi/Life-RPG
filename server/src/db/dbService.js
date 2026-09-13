@@ -47,23 +47,120 @@ export async function dbFindUserByResetToken(token) {
   return db.prepare('SELECT * FROM users WHERE reset_token = ?').get(token);
 }
 
-export async function dbCreateUser({ username, email, password_hash, google_id, avatar_url }) {
-  if (isMongoActive()) {
-    const newUser = await UserDoc.create({
-      username: username.toLowerCase(),
-      email: email.toLowerCase(),
-      password_hash,
-      google_id,
-      avatar_url
-    });
-    return newUser.toObject();
-  }
-  const result = db.prepare(`
-    INSERT INTO users (username, email, password_hash, google_id, avatar_url)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(username.toLowerCase(), email.toLowerCase(), password_hash, google_id || null, avatar_url || null);
+export async function dbInitializeUserAccount({ username, email, password_hash, google_id, avatar_url, characterName, avatarClass }) {
+  const cleanUsername = username.trim().toLowerCase();
+  const cleanEmail = email.trim().toLowerCase();
+  const heroName = characterName?.trim() || username.trim();
+  const heroClass = ['WARRIOR', 'MAGE', 'ROGUE', 'PALADIN'].includes(avatarClass) ? avatarClass : 'WARRIOR';
 
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(Number(result.lastInsertRowid));
+  if (isMongoActive()) {
+    const user = await UserDoc.create({
+      username: cleanUsername,
+      email: cleanEmail,
+      password_hash: password_hash || null,
+      google_id: google_id || null,
+      avatar_url: avatar_url || null
+    });
+    const userId = user._id;
+
+    await CharacterStatsDoc.create({
+      user_id: userId,
+      character_name: heroName,
+      avatar_class: heroClass,
+      level: 1,
+      current_xp: 0,
+      gold: 50,
+      current_streak: 0,
+      longest_streak: 0,
+      active_theme: 'theme-obsidian',
+      active_title: 'Novice Adventurer'
+    });
+
+    const attributes = ['INTELLECT', 'STRENGTH', 'DISCIPLINE', 'CREATIVITY', 'CHARISMA', 'ENDURANCE'];
+    for (const attr of attributes) {
+      await AttributeDoc.create({ user_id: userId, attribute_name: attr, level: 1, points: 0 });
+    }
+
+    await UserInventoryDoc.create({ user_id: userId, item_id: 'theme-obsidian' });
+    await UserInventoryDoc.create({ user_id: userId, item_id: 'title-novice' });
+
+    await QuestDoc.create({
+      user_id: userId,
+      title: 'Awaken Your Inner Hero',
+      description: 'Complete your very first real-life task and explore the Life RPG interface.',
+      category: 'MINDFULNESS',
+      difficulty: 'EASY',
+      priority: 'HIGH',
+      xp_reward: 30,
+      gold_reward: 10,
+      attribute_target: 'DISCIPLINE'
+    });
+
+    await QuestDoc.create({
+      user_id: userId,
+      title: 'Code or Study for 30 Minutes',
+      description: 'Engage in deep focus work or learn a new technical concept.',
+      category: 'KNOWLEDGE',
+      difficulty: 'MEDIUM',
+      priority: 'HIGH',
+      xp_reward: 65,
+      gold_reward: 25,
+      attribute_target: 'INTELLECT'
+    });
+
+    await QuestDoc.create({
+      user_id: userId,
+      title: 'Hydrate and Exercise',
+      description: 'Drink 500ml water and complete 20 pushups or a 15-minute stretch.',
+      category: 'FITNESS',
+      difficulty: 'EASY',
+      priority: 'MEDIUM',
+      xp_reward: 30,
+      gold_reward: 10,
+      attribute_target: 'STRENGTH'
+    });
+
+    const userObj = user.toObject();
+    userObj.id = user._id.toString();
+    return userObj;
+  }
+
+  db.exec('BEGIN TRANSACTION;');
+  try {
+    const insertUser = db.prepare('INSERT INTO users (username, email, password_hash, google_id, avatar_url) VALUES (?, ?, ?, ?, ?)');
+    const userResult = insertUser.run(cleanUsername, cleanEmail, password_hash || null, google_id || null, avatar_url || null);
+    const userId = Number(userResult.lastInsertRowid);
+
+    db.prepare(`
+      INSERT INTO character_stats (user_id, character_name, avatar_class, level, current_xp, gold, current_streak, longest_streak)
+      VALUES (?, ?, ?, 1, 0, 50, 0, 0)
+    `).run(userId, heroName, heroClass);
+
+    const attributes = ['INTELLECT', 'STRENGTH', 'DISCIPLINE', 'CREATIVITY', 'CHARISMA', 'ENDURANCE'];
+    const insertAttr = db.prepare('INSERT INTO attributes (user_id, attribute_name, level, points) VALUES (?, ?, 1, 0)');
+    for (const attr of attributes) {
+      insertAttr.run(userId, attr);
+    }
+
+    const insertInv = db.prepare('INSERT OR IGNORE INTO user_inventory (user_id, item_id) VALUES (?, ?)');
+    insertInv.run(userId, 'theme-obsidian');
+    insertInv.run(userId, 'title-novice');
+
+    const insertQuest = db.prepare(`
+      INSERT INTO quests (user_id, title, description, category, difficulty, priority, xp_reward, gold_reward, attribute_target)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertQuest.run(userId, 'Awaken Your Inner Hero', 'Complete your very first real-life task and explore the Life RPG interface.', 'MINDFULNESS', 'EASY', 'HIGH', 30, 10, 'DISCIPLINE');
+    insertQuest.run(userId, 'Code or Study for 30 Minutes', 'Engage in deep focus work or learn a new technical concept.', 'KNOWLEDGE', 'MEDIUM', 'HIGH', 65, 25, 'INTELLECT');
+    insertQuest.run(userId, 'Hydrate and Exercise', 'Drink 500ml water and complete 20 pushups or a 15-minute stretch.', 'FITNESS', 'EASY', 'MEDIUM', 30, 10, 'STRENGTH');
+
+    db.exec('COMMIT;');
+
+    return db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw err;
+  }
 }
 
 export async function dbUpdateUser(id, fields) {
