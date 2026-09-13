@@ -158,7 +158,7 @@ export const HeroHeader: React.FC<HeroHeaderProps> = ({
 
         {/* Right Side: Currencies, Stats, Notification controls */}
         <div className="hero-right-section">
-          <div className="hero-currency-pills">
+          <div className="hero-currency-pills horizontal-scroll">
             {/* Gold Balance Pill */}
             <button
               type="button"

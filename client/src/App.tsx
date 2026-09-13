@@ -375,7 +375,7 @@ export const App: React.FC = () => {
           {/* Left Column: Quick Actions, Toolbar & Quests List */}
           <section className="dashboard-left-col" aria-label="Active Quests Section">
             {/* Quick-Start Presets */}
-            <div className="side-scroll-container">
+            <div className="horizontal-scroll side-scroll-container">
               <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 <Zap size={14} /> Quick Quests:
               </span>
@@ -420,7 +420,7 @@ export const App: React.FC = () => {
                 }}
               >
                 {/* Status Tabs */}
-                <div className="status-tabs-row side-scroll-container" style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-md)', padding: '0.2rem' }}>
+                <div className="status-tabs-row horizontal-scroll side-scroll-container" style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-md)', padding: '0.2rem' }}>
                   {[
                     { id: 'active', label: 'Active Quests', icon: ListTodo },
                     { id: 'completed', label: 'Conquered', icon: CheckCircle2 },
@@ -454,7 +454,7 @@ export const App: React.FC = () => {
                 </div>
 
                 {/* Actions & Filters */}
-                <div className="toolbar-actions-row side-scroll-container">
+                <div className="toolbar-actions-row horizontal-scroll side-scroll-container">
                   {/* Search Bar */}
                   <div style={{ position: 'relative', minWidth: '160px' }}>
                     <input

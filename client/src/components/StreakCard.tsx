@@ -74,7 +74,7 @@ export const StreakCard: React.FC = () => {
       </div>
 
       {/* Weekday Circular Indicators */}
-      <div className="streak-days-row">
+      <div className="streak-days-row horizontal-scroll">
         {days.map((d) => {
           const isToday = d.dayIndex === todayIndex;
           const isCompleted = activeDays.has(d.dayIndex);
