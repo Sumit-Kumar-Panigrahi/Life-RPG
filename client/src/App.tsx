@@ -420,7 +420,7 @@ export const App: React.FC = () => {
                 }}
               >
                 {/* Status Tabs */}
-                <div className="side-scroll-container" style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-md)', padding: '0.2rem' }}>
+                <div className="status-tabs-row side-scroll-container" style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-md)', padding: '0.2rem' }}>
                   {[
                     { id: 'active', label: 'Active Quests', icon: ListTodo },
                     { id: 'completed', label: 'Conquered', icon: CheckCircle2 },
