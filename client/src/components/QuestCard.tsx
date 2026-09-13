@@ -145,6 +145,7 @@ export const QuestCard: React.FC<QuestCardProps> = ({
 
         {/* Title and Description */}
         <h3
+          className="quest-card-title"
           style={{
             fontSize: '1.1rem',
             fontWeight: 700,
@@ -157,7 +158,7 @@ export const QuestCard: React.FC<QuestCardProps> = ({
         </h3>
 
         {quest.description && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+          <p className="quest-card-desc" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
             {quest.description}
           </p>
         )}

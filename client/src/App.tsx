@@ -454,7 +454,7 @@ export const App: React.FC = () => {
                 </div>
 
                 {/* Actions & Filters */}
-                <div className="side-scroll-container">
+                <div className="toolbar-actions-row side-scroll-container">
                   {/* Search Bar */}
                   <div style={{ position: 'relative', minWidth: '160px' }}>
                     <input
@@ -566,13 +566,7 @@ export const App: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
-                    gap: '1.25rem'
-                  }}
-                >
+                <div className="quest-cards-grid">
                   {quests.map(quest => (
                     <QuestCard
                       key={quest.id}
