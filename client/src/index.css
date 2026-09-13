@@ -700,11 +700,12 @@ html, body {
 .hero-banner {
   position: relative;
   min-height: 230px;
-  overflow: hidden;
+  overflow: visible;
   border-radius: var(--radius-lg);
   margin: 1.5rem 1.5rem 1.5rem;
   border: 1px solid rgba(245, 158, 11, 0.25);
   box-shadow: 0 12px 35px rgba(0, 0, 0, 0.65);
+  z-index: 15;
 }
 
 .hero-banner-bg {
@@ -715,12 +716,16 @@ html, body {
   background-position: center 35%;
   filter: brightness(0.65) contrast(1.1);
   transform: scale(1.02);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .hero-banner-overlay {
   position: absolute;
   inset: 0;
   background: linear-gradient(135deg, rgba(8, 10, 16, 0.94) 0%, rgba(13, 16, 26, 0.82) 55%, rgba(20, 15, 32, 0.88) 100%);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .hero-banner-content {
@@ -1303,55 +1308,83 @@ html, body {
 
 .activity-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.85rem;
-  padding: 0.65rem 0.85rem;
+  padding: 0.7rem 0.85rem;
   border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.04);
+  width: 100%;
 }
 
-.act-icon-box {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+.activity-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.act-content {
+.activity-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.activity-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.activity-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
 }
 
-.act-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+.activity-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.act-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
+.activity-detail {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.act-time {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  white-space: nowrap;
+/* Attribute Cards Progress Row */
+.attr-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
 }
 
-.act-detail {
-  font-size: 0.75rem;
+.attr-progress-numbers {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
   color: var(--text-secondary);
-  margin-top: 0.15rem;
+  margin-top: 0.25rem;
 }
 
 /* ==========================================================================
@@ -1659,4 +1692,293 @@ html, body {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   ULTIMATE 100% FLUID RESPONSIVENESS & MOBILE/TABLET OPTIMIZATIONS
+   ========================================================================== */
+
+/* Medium Tablets & Laptops (<= 1024px) */
+@media (max-width: 1024px) {
+  .app-main-layout {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .mobile-menu-btn {
+    display: inline-flex !important;
+  }
+
+  .hero-banner {
+    margin: 1rem 1rem 1.25rem;
+  }
+
+  .hero-banner-content {
+    padding: 1.5rem 1.5rem;
+    gap: 1.25rem;
+  }
+
+  .streak-card {
+    margin: 0 1rem 1.25rem;
+    padding: 1.25rem;
+  }
+
+  .lower-dashboard-row {
+    margin: 0 1rem 1.5rem;
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablets & Large Phones (<= 768px) */
+@media (max-width: 768px) {
+  .hud-header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .hud-content {
+    gap: 0.5rem;
+  }
+
+  .hud-brand {
+    font-size: 1.1rem;
+  }
+
+  .hud-stats {
+    gap: 0.4rem;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .stat-chip {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.78rem;
+  }
+
+  .xp-container {
+    min-width: 90px;
+    max-width: 140px;
+  }
+
+  .hero-banner-content {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 1.25rem 1rem;
+  }
+
+  .hero-left-section {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hero-right-section {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .hero-currency-pills {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
+
+  .currency-pill {
+    padding: 0.4rem 0.5rem;
+    justify-content: center;
+  }
+
+  .pill-val {
+    font-size: 0.9rem;
+  }
+
+  .hero-action-buttons {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .hero-profile-pill {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .streak-card {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .streak-header {
+    justify-content: center;
+  }
+
+  .streak-days-row {
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: center;
+  }
+
+  .modal-card {
+    width: 96vw !important;
+    max-height: 92vh !important;
+    padding: 1.1rem 0.85rem !important;
+    border-radius: var(--radius-md);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .promo-banner {
+    padding: 1.25rem;
+  }
+
+  .promo-headline {
+    font-size: 1.2rem;
+  }
+
+  .inventory-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile Phones (<= 480px) */
+@media (max-width: 480px) {
+  .form-input, .form-select, .form-textarea {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
+    padding: 0.65rem 0.75rem;
+    min-height: 42px;
+  }
+
+  .btn {
+    min-height: 42px;
+  }
+
+  .hero-left-section {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .hero-avatar-wrapper {
+    margin: 0 auto;
+  }
+
+  .hero-greeting-row {
+    justify-content: center;
+  }
+
+  .hero-player-name {
+    font-size: 1.5rem;
+  }
+
+  .hero-subtitle {
+    font-size: 0.82rem;
+  }
+
+  .hero-xp-labels {
+    font-size: 0.7rem;
+  }
+
+  .streak-dot {
+    width: 30px;
+    height: 30px;
+    font-size: 0.75rem;
+  }
+
+  .streak-number {
+    font-size: 1.5rem;
+  }
+
+  .streak-text {
+    font-size: 1rem;
+  }
+
+  .hud-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.3rem;
+  }
+
+  .stat-chip {
+    justify-content: center;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.4rem;
+  }
+
+  .modal-card {
+    padding: 1rem 0.75rem !important;
+  }
+
+  .card-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+}
+
+/* Specific Tablet & Small Screen Fixes (<= 600px) */
+@media (max-width: 600px) {
+  .attribute-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .activity-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+
+  .activity-title {
+    white-space: normal !important;
+    word-break: break-word;
+  }
+
+  .activity-detail {
+    white-space: normal !important;
+    word-break: break-word;
+  }
+}
+
+/* ==========================================================================
+   SMOOTH HORIZONTAL SIDE-SCROLLING CONTAINER SYSTEM
+   ========================================================================== */
+.side-scroll-container {
+  display: flex !important;
+  align-items: center;
+  gap: 0.6rem;
+  overflow-x: auto !important;
+  white-space: nowrap !important;
+  max-width: 100%;
+  padding-bottom: 0.35rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 158, 11, 0.4) transparent;
+}
+
+.side-scroll-container .btn {
+  white-space: nowrap !important;
+  flex-shrink: 0;
+}
+
+.side-scroll-container::-webkit-scrollbar {
+  height: 4px;
+}
+
+.side-scroll-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 9999px;
+}
+
+.side-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.4);
+  border-radius: 9999px;
+}
+
+.side-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-gold);
+}
+
+
+
+
 

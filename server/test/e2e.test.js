@@ -241,5 +241,42 @@ describe('Life RPG Full-Stack E2E Flow (TZPSv2 Validation)', () => {
       assert.equal(returnData.user.id, data.user.id, 'Existing Google user must retain the exact same user ID');
       assert.equal(returnData.user.email, googleProfile.email);
     });
+
+    test('13. Forgot Password & Reset Password Flow', async () => {
+      // 1. Request Reset Code
+      const forgotRes = await fetch(`${BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrUsername: testUser.email })
+      });
+      assert.equal(forgotRes.status, 200, 'Forgot password request should return 200');
+      const forgotData = await forgotRes.json();
+      assert.ok(forgotData.code, 'Reset code should be generated');
+
+      // 2. Reset Password with Code
+      const newPass = 'BrandNewSecretPassword2026!';
+      const resetRes = await fetch(`${BASE_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailOrUsername: testUser.email,
+          token: forgotData.code,
+          newPassword: newPass
+        })
+      });
+      assert.equal(resetRes.status, 200, 'Password reset should succeed');
+
+      // 3. Login with New Password
+      const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailOrUsername: testUser.username,
+          password: newPass
+        })
+      });
+      assert.equal(loginRes.status, 200, 'Login with new password should succeed');
+    });
   });
 });
+

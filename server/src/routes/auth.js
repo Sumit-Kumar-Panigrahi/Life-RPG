@@ -271,6 +271,117 @@ authRouter.put('/profile', requireAuth, (req, res) => {
   }
 });
 
+// POST /api/auth/forgot-password - Request 6-digit password reset code
+authRouter.post('/forgot-password', async (req, res) => {
+  try {
+    const { emailOrUsername } = req.body;
+    if (!emailOrUsername || !emailOrUsername.trim()) {
+      return res.status(400).json({ error: 'Please enter your username or email address.' });
+    }
+
+    const identifier = emailOrUsername.trim().toLowerCase();
+    const user = db.prepare('SELECT id, username, email, google_id FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?').get(identifier, identifier);
+
+    if (!user) {
+      return res.status(404).json({ error: 'No adventurer account found with that username or email.' });
+    }
+
+    // Generate 6-digit reset code & 15-minute expiration
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = (Date.now() + 15 * 60 * 1000).toString();
+
+    db.prepare('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?').run(resetCode, expiresAt, user.id);
+
+    console.log(`[Auth Reset Password Code] User: ${user.username} (${user.email}) -> Reset Code: ${resetCode}`);
+
+    return res.json({
+      message: `Password reset code generated for ${user.username}. Use code: ${resetCode}`,
+      code: resetCode,
+      username: user.username
+    });
+  } catch (error) {
+    console.error('[Forgot Password Error]', error);
+    return res.status(500).json({ error: 'Failed to process password reset request.' });
+  }
+});
+
+// POST /api/auth/reset-password - Verify reset code and set new password
+authRouter.post('/reset-password', async (req, res) => {
+  try {
+    const { emailOrUsername, token, newPassword } = req.body;
+
+    if (!emailOrUsername || !token || !newPassword) {
+      return res.status(400).json({ error: 'Username/email, reset code, and new password are required.' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    const identifier = emailOrUsername.trim().toLowerCase();
+    const user = db.prepare('SELECT id, username, reset_token, reset_token_expires FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?').get(identifier, identifier);
+
+    if (!user || !user.reset_token) {
+      return res.status(400).json({ error: 'Invalid password reset request or code expired.' });
+    }
+
+    const cleanToken = token.trim();
+    if (user.reset_token !== cleanToken) {
+      return res.status(400).json({ error: 'Incorrect 6-digit reset code. Please check and try again.' });
+    }
+
+    const now = Date.now();
+    const expiresTime = Number(user.reset_token_expires || 0);
+    if (now > expiresTime) {
+      return res.status(400).json({ error: 'Password reset code has expired. Please request a new code.' });
+    }
+
+    // Hash new password and clear reset token
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    db.prepare('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?').run(passwordHash, user.id);
+
+    return res.json({ message: 'Your password has been successfully reset! You can now sign in.' });
+  } catch (error) {
+    console.error('[Reset Password Error]', error);
+    return res.status(500).json({ error: 'Failed to reset password.' });
+  }
+});
+
+// PUT /api/auth/change-password - Authenticated user password update
+authRouter.put('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    const user = db.prepare('SELECT id, password_hash FROM users WHERE id = ?').get(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found.' });
+    }
+
+    // If user has existing password, verify current password
+    if (user.password_hash) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Please enter your current password.' });
+      }
+      const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!isMatch) {
+        return res.status(400).json({ error: 'Current password is incorrect.' });
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.id);
+
+    return res.json({ message: 'Password updated successfully!' });
+  } catch (error) {
+    console.error('[Change Password Error]', error);
+    return res.status(500).json({ error: 'Failed to change password.' });
+  }
+});
+
 // GET /api/auth/google/status - Check if Google OAuth credentials are set
 authRouter.get('/google/status', (req, res) => {
   const isConfigured = Boolean(CONFIG.GOOGLE_CLIENT_ID && CONFIG.GOOGLE_CLIENT_SECRET);

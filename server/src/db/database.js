@@ -101,6 +101,12 @@ export function initDatabase() {
   if (!colNames.has('avatar_url')) {
     db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT;");
   }
+  if (!colNames.has('reset_token')) {
+    db.exec("ALTER TABLE users ADD COLUMN reset_token TEXT;");
+  }
+  if (!colNames.has('reset_token_expires')) {
+    db.exec("ALTER TABLE users ADD COLUMN reset_token_expires TEXT;");
+  }
 
   // Seed default shop catalog if empty
   const itemCount = db.prepare('SELECT COUNT(*) as count FROM shop_items').get().count;

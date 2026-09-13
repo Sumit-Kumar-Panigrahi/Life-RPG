@@ -14,6 +14,20 @@ interface RecentActivityProps {
   completedQuests: Quest[];
 }
 
+function formatLocalTime(dateStr: string): string {
+  try {
+    let raw = dateStr.trim();
+    if (!raw.endsWith('Z') && !raw.includes('+') && !raw.includes('T')) {
+      raw = raw.replace(' ', 'T') + 'Z';
+    }
+    const date = new Date(raw);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return dateStr;
+  }
+}
+
 export const RecentActivity: React.FC<RecentActivityProps> = ({ completedQuests }) => {
   const { character, inventory } = useAuth();
 
@@ -34,7 +48,7 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ completedQuests 
       id: `quest-${q.id}`,
       title: `Completed: ${q.title}`,
       detail: `+${q.xp_reward} XP • +${q.gold_reward} Gold`,
-      time: q.completed_at ? new Date(q.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : `${(idx + 1) * 20}m ago`,
+      time: q.completed_at ? formatLocalTime(q.completed_at) : `${(idx + 1) * 20}m ago`,
       icon: CheckCircle2,
       color: '#10b981',
       badge: 'Quest'

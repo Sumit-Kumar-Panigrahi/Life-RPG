@@ -197,10 +197,10 @@ questsRouter.post('/:id/complete', (req, res) => {
       // Mark quest as completed
       const markCompleted = db.prepare(`
         UPDATE quests
-        SET is_completed = 1, completed_at = datetime('now')
+        SET is_completed = 1, completed_at = ?
         WHERE id = ? AND user_id = ? AND is_completed = 0
       `);
-      const updateResult = markCompleted.run(questId, req.user.id);
+      const updateResult = markCompleted.run(new Date().toISOString(), questId, req.user.id);
 
       if (updateResult.changes === 0) {
         db.exec('ROLLBACK;');

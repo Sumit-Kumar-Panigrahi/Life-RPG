@@ -484,6 +484,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </p>
             </div>
 
+            {/* Change Password Form */}
+            <div style={{ padding: '1rem', background: 'var(--bg-base)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
+                <Shield size={16} style={{ color: 'var(--accent-gold)' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Security & Password Management</span>
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.currentTarget;
+                  const curPass = (form.elements.namedItem('currentPass') as HTMLInputElement)?.value;
+                  const newPass = (form.elements.namedItem('newPass') as HTMLInputElement)?.value;
+                  setError(null);
+                  setSuccess(null);
+                  setSubmitting(true);
+                  sound.playClick();
+                  try {
+                    const res = await api.auth.changePassword({ currentPassword: curPass, newPassword: newPass });
+                    setSuccess(res.message);
+                    form.reset();
+                  } catch (err: unknown) {
+                    setError(err instanceof Error ? err.message : 'Failed to update password.');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+              >
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Current Password</label>
+                  <input
+                    name="currentPass"
+                    type="password"
+                    className="form-input"
+                    placeholder="Enter current password"
+                    style={{ fontSize: '0.85rem' }}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>New Password</label>
+                  <input
+                    name="newPass"
+                    type="password"
+                    className="form-input"
+                    placeholder="Enter new password (min 6 chars)"
+                    minLength={6}
+                    required
+                    style={{ fontSize: '0.85rem' }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}
+                  disabled={submitting}
+                >
+                  <Save size={14} />
+                  <span>Update Password</span>
+                </button>
+              </form>
+            </div>
+
             <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
               <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#ef4444', marginBottom: '0.35rem' }}>
                 Leave Realm Session

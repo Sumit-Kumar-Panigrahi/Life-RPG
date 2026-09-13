@@ -106,6 +106,32 @@ export const api = {
       }>('/auth/profile', {
         method: 'PUT',
         body: JSON.stringify(body)
+      }),
+
+    forgotPassword: (body: { emailOrUsername: string }) =>
+      request<{
+        message: string;
+        code?: string;
+        username?: string;
+      }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      }),
+
+    resetPassword: (body: { emailOrUsername: string; token: string; newPassword: string }) =>
+      request<{
+        message: string;
+      }>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      }),
+
+    changePassword: (body: { currentPassword?: string; newPassword: string }) =>
+      request<{
+        message: string;
+      }>('/auth/change-password', {
+        method: 'PUT',
+        body: JSON.stringify(body)
       })
   },
 
