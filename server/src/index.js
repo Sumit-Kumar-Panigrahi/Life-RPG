@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { CONFIG } from './config.js';
 import { initDatabase } from './db/database.js';
+import { connectMongoDB } from './db/mongo.js';
 import { authRouter } from './routes/auth.js';
 import { questsRouter } from './routes/quests.js';
 import { characterRouter } from './routes/character.js';
@@ -14,8 +15,11 @@ import { shopRouter } from './routes/shop.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize persistent SQLite database tables and seed items
+// Initialize DB: Attempts MongoDB Atlas cloud cluster first if configured, or falls back to persistent SQLite
 initDatabase();
+connectMongoDB().catch(err => {
+  console.error('[MongoDB Startup Error]', err.message);
+});
 
 const app = express();
 

@@ -16,6 +16,7 @@ export const CONFIG = {
   JWT_SECRET: process.env.JWT_SECRET || 'liferpg_super_secret_jwt_key_tzpsv2_hackathon_2026',
   JWT_EXPIRES_IN: '7d',
   DB_PATH: process.env.DB_PATH || path.join(__dirname, '..', 'data', 'liferpg.db'),
+  MONGODB_URI: process.env.MONGODB_URI || '',
   CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
